@@ -196,7 +196,8 @@ class EncoderLayer(Model):
 
 
 class Encoder(Model):
-    def __init__(self, N=6, d_model=512, d_ff=2048, h=8, dropout=0.1, **kwargs):
+    def __init__(self, N=6, d_model=512, d_ff=2048, h=8, dropout=0.1,
+                 **kwargs):
         """
         N: int
         d_model: int
@@ -219,5 +220,79 @@ class Encoder(Model):
 
         for layer in self.encoder_layers:
             out = layer([out, mask])
+
+        return out
+
+
+class DecoderLayer(Model):
+    def __init__(self, d_model, d_ff, h, dropout, **kwargs):
+        super(DecoderLayer, self).__init__(**kwargs)
+        self.add_1 = Add()
+        self.layer_norm_1 = LayerNormalization()
+
+        self.attn_1 = MultiHeadAttention(d_model, h, True, dropout)
+
+        self.add_2 = Add()
+        self.layer_norm_2 = LayerNormalization()
+
+        self.attn_2 = MultiHeadAttention(d_model, h, True, dropout)
+
+        self.conv_1 = Conv1D(filters=d_ff, kernel_size=1, activation="relu")
+        self.conv_2 = Conv1D(filters=d_model, kernel_size=1)
+
+        self.add_3 = Add()
+        self.layer_norm_3 = LayerNormalization()
+
+    def call(self, inputs):
+        """
+        inp: [batch, seq_len, d_model]
+        memory: [batch, seq_len, d_model]
+        input_mask: [batch, seq_len, seq_len]
+        target_mask: [batch, seq_len, seq_len]
+        """
+        inp, memory, input_mask, target_mask = inputs
+        out = inp
+        out = self.layer_norm_1(
+            self.add_1([out, self.attn_1([out, out, out, target_mask])]))
+        out = self.layer_norm_2(
+            self.add_2([out,
+                        self.attn_2([out, memory, memory, input_mask])]))
+        out = self.layer_norm_3(self.add_3([out, self.feed_forward(out)]))
+        return out
+
+    def feed_forward(self, out):
+        """
+        Positionwise FeedForward
+
+        2 options:
+        - linear + relu + linear
+        - convolution + relu + convolution (kernel_size=1)
+
+        input:
+            out: [batch, seq_len, d_model]
+        """
+        out = self.conv_1(out)  # [batch, seq_len, d_ff]
+        return self.conv_2(out)  # [batch, seq_len, d_model]
+
+
+class Decoder(Model):
+    def __init__(self, N, d_model, d_ff, h, dropout, **kwargs):
+        super(Decoder, self).__init__(**kwargs)
+        self.decoder_layers = [
+            DecoderLayer(d_model, d_ff, h, dropout) for _ in range(N)
+        ]
+
+    def call(self, inputs):
+        """
+        inp: [batch, seq_len, d_model]
+        enc_out: encoder output [batch, seq_len, d_model]
+        input_mask: [batch, seq_len, seq_len]
+        target_mask: [batch, seq_len, seq_len]
+        """
+        inp, enc_out, input_mask, target_mask = inputs
+        out = inp
+
+        for layer in self.decoder_layers:
+            out = layer([out, enc_out, input_mask, target_mask])
 
         return out
