@@ -30,7 +30,7 @@ class Attention(Layer):
         K: [h * batch, k_size, d_model]
         V: [h * batch, k_size, d_model]
         mask?: [h * batch, q_size, k_size]
-        
+
         [h * batch, q_size, d_model]
         """
 
@@ -70,7 +70,6 @@ class MultiHeadAttention(Model):
         super(MultiHeadAttention, self).__init__(**kwargs)
 
         self.use_mask = use_mask
-        self.dropout = 1.0 - dropout  # keep_prob
 
         self.lq = Dense(d_model, activation="relu", name="query")
         self.lk = Dense(d_model, activation="relu", name="key")
@@ -96,7 +95,7 @@ class MultiHeadAttention(Model):
             key: [batch, k_size, d_model]
             value: [batch, k_size, d_model]
             mask?: [batch, q_size, k_size]
-        
+
         returns:
             [batch, q_size, d_model]
         """
@@ -184,11 +183,11 @@ class EncoderLayer(Model):
     def feed_forward(self, out):
         """
         Positionwise FeedForward
-        
+
         2 options:
         - linear + relu + linear
         - convolution + relu + convolution (kernel_size=1)
-        
+
         input:
             out: [batch, seq_len, d_model]
         """
