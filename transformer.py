@@ -46,9 +46,14 @@ class Attention(Layer):
             out = tf.multiply(out, mask) + (1.0 - mask) * (-1e10)
 
         out = Backend.softmax(out)
-        out = Backend.dropout(out, self.dropout)
-        out = tf.matmul(out, V)  # [h * batch, q_size, d_model]
 
+        # https://github.com/tensorflow/tensorflow/blob/r1.12/tensorflow/python/keras/layers/core.py#L136
+        out = tf.contrib.framework.smart_cond(
+            Backend.learning_phase(),
+            lambda: Backend.dropout(out, self.dropout),
+            lambda: tf.identity(out))
+
+        out = tf.matmul(out, V)  # [h * batch, q_size, d_model]
         return out
 
     def compute_output_shape(self, input_shape):
