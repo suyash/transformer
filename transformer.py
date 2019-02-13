@@ -527,7 +527,6 @@ class Transformer(Model):
             kernel_initializer=initializer,
             bias_initializer=initializer)
 
-        # NOTE: for embeddings, the `pad_id` values are not initialized to zero
         self.inp_embed = Embedding(
             input_vocab_size,
             d_model,
