@@ -5,21 +5,11 @@ https://github.com/lilianweng/transformer-tensorflow/blob/master/transformer_tes
 import numpy as np
 import tensorflow as tf
 
-from transformer import Transformer
+from transformer import create_padding_mask, create_subsequent_mask, positional_encoding
 
 
 class TransformerTest(tf.test.TestCase):
     def setUp(self):
-        self.t = Transformer(
-            input_vocab_size=64,
-            target_vocab_size=64,
-            pad_id=0,
-            h=4,
-            d_model=64,
-            d_ff=128,
-            N_encoder=2,
-            N_decoder=2)
-
         self.batch_size = 4
         self.seq_len = 5
         self.raw_input = tf.placeholder(
@@ -37,7 +27,7 @@ class TransformerTest(tf.test.TestCase):
         """
         with self.test_session() as sess:
             mask = sess.run(
-                self.t.create_padding_mask(self.raw_input, 0),
+                create_padding_mask(self.raw_input, 0),
                 feed_dict={self.raw_input: self.fake_data})
             expected = np.array([
                 [[1., 1., 1., 1., 1.]] * self.seq_len,
@@ -54,7 +44,7 @@ class TransformerTest(tf.test.TestCase):
         with self.test_session() as sess:
             data = np.zeros((self.batch_size, self.seq_len))
             mask = sess.run(
-                self.t.create_subsequent_mask(self.raw_input),
+                create_subsequent_mask(self.raw_input),
                 feed_dict={self.raw_input: data})
             expected = [np.tril(np.ones(
                 (self.seq_len, self.seq_len)))] * self.batch_size
@@ -65,9 +55,8 @@ class TransformerTest(tf.test.TestCase):
         https://github.com/lilianweng/transformer-tensorflow/blob/master/transformer_test.py#L96
         """
         with self.test_session() as sess:
-            self.t.d_model = 8
             encoding = sess.run(
-                self.t.positional_encoding(self.raw_input),
+                positional_encoding(self.raw_input, 8),
                 feed_dict={self.raw_input: self.fake_data})
             assert encoding.shape == (4, 5, 8)
 

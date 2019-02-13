@@ -454,9 +454,9 @@ class Transformer(Model):
         self.decoder = Decoder(
             N_decoder, d_model, d_ff, h, dropout, initializer=initializer)
         self.input_mask_layer = Lambda(
-            lambda t: self.create_padding_mask(t, pad_id), name="input_mask")
+            lambda t: create_padding_mask(t, pad_id), name="input_mask")
         self.target_mask_layer = Lambda(
-            lambda t: self.create_padding_mask(t, pad_id) * self.create_subsequent_mask(t),
+            lambda t: create_padding_mask(t, pad_id) * create_subsequent_mask(t),
             name="target_mask")
         self.logits_layer = Dense(
             target_vocab_size,
@@ -471,7 +471,7 @@ class Transformer(Model):
             target_vocab_size, d_model, embeddings_initializer=initializer)
 
         self.positional_encode = Lambda(
-            self.positional_encoding, name="positional_encoding")
+            lambda t: positional_encoding(t, d_model), name="positional_encoding")
 
     def call(self, inputs):
         """
@@ -496,54 +496,57 @@ class Transformer(Model):
         logits = self.logits_layer(dec_out)
         return logits
 
-    def create_padding_mask(self, inp, pad_id):
-        """
-        creates an attention mask that blocks current token from attending to padding tokens
 
-        inp: [batch_size, seq_len]
-        pad_id: int
+def create_padding_mask(inp, pad_id):
+    """
+    creates an attention mask that blocks current token from attending to padding tokens
 
-        returns: [batch_size, seq_len, seq_len]
-        """
-        mask = tf.cast(tf.not_equal(inp, pad_id), tf.float32)
-        mask = tf.tile(tf.expand_dims(mask, 1), [1, tf.shape(inp)[1], 1])
-        return mask
+    inp: [batch_size, seq_len]
+    pad_id: int
 
-    def create_subsequent_mask(self, inp):
-        """
-        creates an attention mask that blocks current token from attending to tokens after itself
+    returns: [batch_size, seq_len, seq_len]
+    """
+    mask = tf.cast(tf.not_equal(inp, pad_id), tf.float32)
+    mask = tf.tile(tf.expand_dims(mask, 1), [1, tf.shape(inp)[1], 1])
+    return mask
 
-        https://github.com/lilianweng/transformer-tensorflow/blob/master/transformer.py#L380
 
-        inp: [batch_size, seq_len]
+def create_subsequent_mask(inp):
+    """
+    creates an attention mask that blocks current token from attending to tokens after itself
 
-        returns: [batch_size, seq_len, seq_len]
-        """
-        seq_len = inp.shape.as_list()[1]
+    https://github.com/lilianweng/transformer-tensorflow/blob/master/transformer.py#L380
 
-        tri_matrix = np.zeros((seq_len, seq_len))
-        tri_matrix[np.tril_indices(seq_len)] = 1
+    inp: [batch_size, seq_len]
 
-        mask = tf.convert_to_tensor(tri_matrix, dtype=tf.float32)
-        mask = tf.tile(tf.expand_dims(mask, 0), [tf.shape(inp)[0], 1, 1])
-        return mask
+    returns: [batch_size, seq_len, seq_len]
+    """
+    seq_len = inp.shape.as_list()[1]
 
-    def positional_encoding(self, inp):
-        """
-        sinusoidal positional encoding for the inputs
+    tri_matrix = np.zeros((seq_len, seq_len))
+    tri_matrix[np.tril_indices(seq_len)] = 1
 
-        inp: [batch_size, seq_len]
+    mask = tf.convert_to_tensor(tri_matrix, dtype=tf.float32)
+    mask = tf.tile(tf.expand_dims(mask, 0), [tf.shape(inp)[0], 1, 1])
+    return mask
 
-        returns: [batch_size, seq_len, d_model]
-        """
-        seq_len = inp.shape.as_list()[1]
 
-        encoding = np.array([[
-            pos / np.power(10000.0, 2.0 * (i // 2) / self.d_model)
-            for i in range(self.d_model)
-        ] for pos in range(seq_len)])
-        encoding[:, 0::2] = np.sin(encoding[:, 0::2])
-        encoding[:, 1::2] = np.cos(encoding[:, 1::2])
+def positional_encoding(inp, d_model):
+    """
+    sinusoidal positional encoding for the inputs
 
-        encoding = tf.convert_to_tensor(encoding, dtype=tf.float32)
-        return tf.tile(tf.expand_dims(encoding, 0), [tf.shape(inp)[0], 1, 1])
+    inp: [batch_size, seq_len]
+
+    returns: [batch_size, seq_len, d_model]
+    """
+    seq_len = inp.shape.as_list()[1]
+
+    encoding = np.array([[
+        pos / np.power(10000.0, 2.0 * (i // 2) / d_model)
+        for i in range(d_model)
+    ] for pos in range(seq_len)])
+    encoding[:, 0::2] = np.sin(encoding[:, 0::2])
+    encoding[:, 1::2] = np.cos(encoding[:, 1::2])
+
+    encoding = tf.convert_to_tensor(encoding, dtype=tf.float32)
+    return tf.tile(tf.expand_dims(encoding, 0), [tf.shape(inp)[0], 1, 1])
