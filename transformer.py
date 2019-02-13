@@ -413,7 +413,11 @@ class Decoder(Model):
 
 class Transformer(Model):
     """
-    input embedding + encoder + decoder
+    input embedding + encoder -> target_embedding + decoder -> logits
+
+    This simply takes of inputs of shape [batch_size, input_seq_len], [batch_size, target_seq_len]
+    and will give logits of shape [batch_size, target_seq_len, target_vocab_size].
+    Reduction, loss calculation etc. is left to the caller
     """
 
     def __init__(self,
