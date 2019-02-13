@@ -65,7 +65,13 @@ class MultiHeadAttention(Model):
     Multiheaded Attention by splitting across `h` attention heads
     """
 
-    def __init__(self, d_model, h, use_mask, dropout, **kwargs):
+    def __init__(self,
+                 d_model,
+                 h,
+                 use_mask,
+                 dropout,
+                 initializer="glorot_uniform",
+                 **kwargs):
         """
         d_model: int
         h: int
@@ -76,9 +82,24 @@ class MultiHeadAttention(Model):
 
         self.use_mask = use_mask
 
-        self.lq = Dense(d_model, activation="relu", name="query")
-        self.lk = Dense(d_model, activation="relu", name="key")
-        self.lv = Dense(d_model, activation="relu", name="value")
+        self.lq = Dense(
+            d_model,
+            activation="relu",
+            name="query",
+            kernel_initializer=initializer,
+            bias_initializer=initializer)
+        self.lk = Dense(
+            d_model,
+            activation="relu",
+            name="key",
+            kernel_initializer=initializer,
+            bias_initializer=initializer)
+        self.lv = Dense(
+            d_model,
+            activation="relu",
+            name="value",
+            kernel_initializer=initializer,
+            bias_initializer=initializer)
 
         self.splitter = Lambda(
             lambda t: tf.concat(tf.split(t, h, axis=2), axis=0),
@@ -154,7 +175,13 @@ class LayerNormalization(Layer):
 
 
 class EncoderLayer(Model):
-    def __init__(self, d_model, d_ff, h, dropout, **kwargs):
+    def __init__(self,
+                 d_model,
+                 d_ff,
+                 h,
+                 dropout,
+                 initializer="glorot_uniform",
+                 **kwargs):
         """
         d_model: int
         d_ff: int
@@ -165,10 +192,20 @@ class EncoderLayer(Model):
         self.add_1 = Add()
         self.layer_norm_1 = LayerNormalization()
 
-        self.attn = MultiHeadAttention(d_model, h, True, dropout)
+        self.attn = MultiHeadAttention(
+            d_model, h, True, dropout, initializer=initializer)
 
-        self.conv_1 = Conv1D(filters=d_ff, kernel_size=1, activation="relu")
-        self.conv_2 = Conv1D(filters=d_model, kernel_size=1)
+        self.conv_1 = Conv1D(
+            filters=d_ff,
+            kernel_size=1,
+            activation="relu",
+            kernel_initializer=initializer,
+            bias_initializer=initializer)
+        self.conv_2 = Conv1D(
+            filters=d_model,
+            kernel_size=1,
+            kernel_initializer=initializer,
+            bias_initializer=initializer)
 
         self.add_2 = Add()
         self.layer_norm_2 = LayerNormalization()
@@ -201,7 +238,13 @@ class EncoderLayer(Model):
 
 
 class Encoder(Model):
-    def __init__(self, N=6, d_model=512, d_ff=2048, h=8, dropout=0.1,
+    def __init__(self,
+                 N=6,
+                 d_model=512,
+                 d_ff=2048,
+                 h=8,
+                 dropout=0.1,
+                 initializer="glorot_uniform",
                  **kwargs):
         """
         N: int
@@ -212,7 +255,8 @@ class Encoder(Model):
         """
         super(Encoder, self).__init__(**kwargs)
         self.encoder_layers = [
-            EncoderLayer(d_model, d_ff, h, dropout) for _ in range(N)
+            EncoderLayer(d_model, d_ff, h, dropout, initializer=initializer)
+            for _ in range(N)
         ]
 
     def call(self, inputs):
@@ -230,20 +274,35 @@ class Encoder(Model):
 
 
 class DecoderLayer(Model):
-    def __init__(self, d_model, d_ff, h, dropout, **kwargs):
+    def __init__(self,
+                 d_model,
+                 d_ff,
+                 h,
+                 dropout,
+                 initializer="glorot_uniform",
+                 **kwargs):
         super(DecoderLayer, self).__init__(**kwargs)
         self.add_1 = Add()
         self.layer_norm_1 = LayerNormalization()
 
-        self.attn_1 = MultiHeadAttention(d_model, h, True, dropout)
+        self.attn_1 = MultiHeadAttention(d_model, h, True, dropout, initializer=initializer)
 
         self.add_2 = Add()
         self.layer_norm_2 = LayerNormalization()
 
-        self.attn_2 = MultiHeadAttention(d_model, h, True, dropout)
+        self.attn_2 = MultiHeadAttention(d_model, h, True, dropout, initializer=initializer)
 
-        self.conv_1 = Conv1D(filters=d_ff, kernel_size=1, activation="relu")
-        self.conv_2 = Conv1D(filters=d_model, kernel_size=1)
+        self.conv_1 = Conv1D(
+            filters=d_ff,
+            kernel_size=1,
+            activation="relu",
+            kernel_initializer=initializer,
+            bias_initializer=initializer)
+        self.conv_2 = Conv1D(
+            filters=d_model,
+            kernel_size=1,
+            kernel_initializer=initializer,
+            bias_initializer=initializer)
 
         self.add_3 = Add()
         self.layer_norm_3 = LayerNormalization()
@@ -281,11 +340,18 @@ class DecoderLayer(Model):
 
 
 class Decoder(Model):
-    def __init__(self, N=6, d_model=512, d_ff=2048, h=8, dropout=0.1,
+    def __init__(self,
+                 N=6,
+                 d_model=512,
+                 d_ff=2048,
+                 h=8,
+                 dropout=0.1,
+                 initializer="glorot_uniform",
                  **kwargs):
         super(Decoder, self).__init__(**kwargs)
         self.decoder_layers = [
-            DecoderLayer(d_model, d_ff, h, dropout) for _ in range(N)
+            DecoderLayer(d_model, d_ff, h, dropout, initializer=initializer)
+            for _ in range(N)
         ]
 
     def call(self, inputs):
@@ -334,14 +400,20 @@ class Transformer(Model):
         self.d_model = d_model
         self.dropout = dropout
 
-        self.encoder = Encoder(N_encoder, d_model, d_ff, h, dropout)
-        self.decoder = Decoder(N_decoder, d_model, d_ff, h, dropout)
+        self.encoder = Encoder(
+            N_encoder, d_model, d_ff, h, dropout, initializer=initializer)
+        self.decoder = Decoder(
+            N_decoder, d_model, d_ff, h, dropout, initializer=initializer)
         self.input_mask_layer = Lambda(
             lambda t: self.create_padding_mask(t, pad_id), name="input_mask")
         self.target_mask_layer = Lambda(
             lambda t: self.create_padding_mask(t, pad_id) * self.create_subsequent_mask(t),
             name="target_mask")
-        self.logits_layer = Dense(target_vocab_size, name="logits")
+        self.logits_layer = Dense(
+            target_vocab_size,
+            name="logits",
+            kernel_initializer=initializer,
+            bias_initializer=initializer)
 
         # NOTE: for embeddings, the `pad_id` values are not initialized to zero
         self.inp_embed = Embedding(
