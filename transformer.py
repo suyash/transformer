@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow.keras import backend as Backend
 from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.initializers import Ones, Zeros
-from tensorflow.keras.layers import Add, Conv1D, Dense, Lambda, Layer
+from tensorflow.keras.layers import Add, Conv1D, Dense, Dropout, Embedding, Lambda, Layer
 from tensorflow.keras.models import Model
 
 
@@ -20,7 +20,7 @@ class Attention(Layer):
         dropout: float[0, 1]
         """
         self.d_k = d_k
-        self.dropout = 1.0 - dropout  # keep_prob
+        self.dropout = dropout
         self.use_mask = use_mask
         super(Attention, self).__init__(**kwargs)
 
@@ -276,7 +276,8 @@ class DecoderLayer(Model):
 
 
 class Decoder(Model):
-    def __init__(self, N, d_model, d_ff, h, dropout, **kwargs):
+    def __init__(self, N=6, d_model=512, d_ff=2048, h=8, dropout=0.1,
+                 **kwargs):
         super(Decoder, self).__init__(**kwargs)
         self.decoder_layers = [
             DecoderLayer(d_model, d_ff, h, dropout) for _ in range(N)
@@ -296,3 +297,123 @@ class Decoder(Model):
             out = layer([out, enc_out, input_mask, target_mask])
 
         return out
+
+
+class Transformer(Model):
+    def __init__(self,
+                 input_vocab_size,
+                 target_vocab_size,
+                 pad_id,
+                 N_encoder=6,
+                 N_decoder=6,
+                 d_model=512,
+                 d_ff=2048,
+                 h=8,
+                 dropout=0.1,
+                 initializer="glorot_uniform",
+                 **kwargs):
+        """
+        input_vocab_size: int
+        target_vocab_size: int
+        pad_id: int
+        N_encoder: int
+        N_decoder: int
+        d_model: int
+        d_ff: int
+        h: int
+        dropout: float[0, 1]
+        initializer: string/keras.initializers object
+        """
+        super(Transformer, self).__init__(**kwargs)
+
+        self.d_model = d_model
+        self.dropout = dropout
+
+        self.encoder = Encoder(N_encoder, d_model, d_ff, h, dropout)
+        self.decoder = Decoder(N_decoder, d_model, d_ff, h, dropout)
+        self.input_mask_layer = Lambda(
+            lambda t: self.create_padding_mask(t, pad_id), name="input_mask")
+        self.target_mask_layer = Lambda(
+            lambda t: self.create_padding_mask(t, pad_id) * self.create_subsequent_mask(t),
+            name="target_mask")
+        self.logits_layer = Dense(target_vocab_size, name="logits")
+
+        # NOTE: for embeddings, the `pad_id` values are not initialized to zero
+        self.inp_embed = Embedding(
+            input_vocab_size, d_model, embeddings_initializer=initializer)
+        self.tar_embed = Embedding(
+            target_vocab_size, d_model, embeddings_initializer=initializer)
+
+        self.positional_encode = Lambda(
+            self.positional_encoding, name="positional_encoding")
+
+    def call(self, inputs):
+        """
+        enc_inp: [batch_size, seq_len]
+        dec_inp: [batch_size, seq_len]
+        """
+        enc_inp, dec_inp = inputs
+
+        inp_mask = self.input_mask_layer(enc_inp)
+        tar_mask = self.target_mask_layer(dec_inp)
+
+        enc_inp = Dropout(self.dropout)(
+            Add()([self.inp_embed(enc_inp),
+                   self.positional_encode(enc_inp)]))
+        dec_inp = Dropout(self.dropout)(
+            Add()([self.tar_embed(dec_inp),
+                   self.positional_encode(dec_inp)]))
+
+        enc_out = self.encoder([enc_inp, inp_mask])
+        dec_out = self.decoder([dec_inp, enc_out, inp_mask, tar_mask])
+
+        logits = self.logits_layer(dec_out)
+        return logits
+
+    def create_padding_mask(self, inp, pad_id):
+        """
+        creates an attention mask that blocks current token from attending to padding tokens
+
+        inp: [batch_size, seq_len]
+        pad_id: int
+        """
+        mask = tf.cast(tf.not_equal(inp, pad_id), tf.float32)
+        mask = tf.tile(tf.expand_dims(mask, 1), [1, tf.shape(inp)[1], 1])
+        return mask
+
+    def create_subsequent_mask(self, inp):
+        """
+        creates an attention mask that blocks current token from attending to tokens after itself
+
+        https://github.com/lilianweng/transformer-tensorflow/blob/master/transformer.py#L380
+
+        inp: [batch_size, seq_len]
+        """
+        seq_len = inp.shape.as_list()[1]
+
+        tri_matrix = np.zeros((seq_len, seq_len))
+        tri_matrix[np.tril_indices(seq_len)] = 1
+
+        mask = tf.convert_to_tensor(tri_matrix, dtype=tf.float32)
+        mask = tf.tile(tf.expand_dims(mask, 0), [tf.shape(inp)[0], 1, 1])
+        return mask
+
+    def positional_encoding(self, inp):
+        """
+        sinusoidal positional encoding for the inputs
+
+        inp: [batch_size, seq_len]
+
+        returns: [batch_size, seq_len, d_model]
+        """
+        seq_len = inp.shape.as_list()[1]
+
+        encoding = np.array([[
+            pos / np.power(10000.0, 2.0 * (i // 2) / self.d_model)
+            for i in range(self.d_model)
+        ] for pos in range(seq_len)])
+        encoding[:, 0::2] = np.sin(encoding[:, 0::2])
+        encoding[:, 1::2] = np.cos(encoding[:, 1::2])
+
+        encoding = tf.convert_to_tensor(encoding, dtype=tf.float32)
+        return tf.tile(tf.expand_dims(encoding, 0), [tf.shape(inp)[0], 1, 1])
