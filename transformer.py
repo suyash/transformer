@@ -1,3 +1,11 @@
+"""
+http://nlp.seas.harvard.edu/2018/04/03/attention.html
+
++
+
+https://github.com/lilianweng/transformer-tensorflow
+"""
+
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import backend as Backend
@@ -175,6 +183,10 @@ class LayerNormalization(Layer):
 
 
 class EncoderLayer(Model):
+    """
+    self attention + FF
+    """
+
     def __init__(self,
                  d_model,
                  d_ff,
@@ -238,6 +250,10 @@ class EncoderLayer(Model):
 
 
 class Encoder(Model):
+    """
+    N `EncoderLayer`s in sequence
+    """
+
     def __init__(self,
                  N=6,
                  d_model=512,
@@ -274,6 +290,10 @@ class Encoder(Model):
 
 
 class DecoderLayer(Model):
+    """
+    self attention + src attention + FF
+    """
+
     def __init__(self,
                  d_model,
                  d_ff,
@@ -281,16 +301,25 @@ class DecoderLayer(Model):
                  dropout,
                  initializer="glorot_uniform",
                  **kwargs):
+        """
+        d_model: int
+        d_ff: int
+        h: int
+        dropout: float[0, 1]
+        initializer: string/keras.initializers object
+        """
         super(DecoderLayer, self).__init__(**kwargs)
         self.add_1 = Add()
         self.layer_norm_1 = LayerNormalization()
 
-        self.attn_1 = MultiHeadAttention(d_model, h, True, dropout, initializer=initializer)
+        self.attn_1 = MultiHeadAttention(
+            d_model, h, True, dropout, initializer=initializer)
 
         self.add_2 = Add()
         self.layer_norm_2 = LayerNormalization()
 
-        self.attn_2 = MultiHeadAttention(d_model, h, True, dropout, initializer=initializer)
+        self.attn_2 = MultiHeadAttention(
+            d_model, h, True, dropout, initializer=initializer)
 
         self.conv_1 = Conv1D(
             filters=d_ff,
@@ -340,6 +369,10 @@ class DecoderLayer(Model):
 
 
 class Decoder(Model):
+    """
+    N `DecoderLayer`s in sequence
+    """
+
     def __init__(self,
                  N=6,
                  d_model=512,
@@ -348,6 +381,14 @@ class Decoder(Model):
                  dropout=0.1,
                  initializer="glorot_uniform",
                  **kwargs):
+        """
+        N: int
+        d_model: int
+        d_ff: int
+        h: int
+        dropout: float[0, 1]
+        initializer: string/keras.initializers object
+        """
         super(Decoder, self).__init__(**kwargs)
         self.decoder_layers = [
             DecoderLayer(d_model, d_ff, h, dropout, initializer=initializer)
@@ -371,6 +412,10 @@ class Decoder(Model):
 
 
 class Transformer(Model):
+    """
+    input embedding + encoder + decoder
+    """
+
     def __init__(self,
                  input_vocab_size,
                  target_vocab_size,
@@ -453,6 +498,8 @@ class Transformer(Model):
 
         inp: [batch_size, seq_len]
         pad_id: int
+
+        returns: [batch_size, seq_len, seq_len]
         """
         mask = tf.cast(tf.not_equal(inp, pad_id), tf.float32)
         mask = tf.tile(tf.expand_dims(mask, 1), [1, tf.shape(inp)[1], 1])
@@ -465,6 +512,8 @@ class Transformer(Model):
         https://github.com/lilianweng/transformer-tensorflow/blob/master/transformer.py#L380
 
         inp: [batch_size, seq_len]
+
+        returns: [batch_size, seq_len, seq_len]
         """
         seq_len = inp.shape.as_list()[1]
 
