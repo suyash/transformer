@@ -10,8 +10,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import backend as Backend
 from tensorflow.keras.callbacks import TensorBoard
-from tensorflow.keras.initializers import Ones, Zeros
-from tensorflow.keras.layers import Add, Conv1D, Dense, Dropout, Embedding, Lambda, Layer
+from tensorflow.keras.layers import Add, Conv1D, Dense, Dropout, Lambda, Layer
 from tensorflow.keras.models import Model
 
 
@@ -168,9 +167,9 @@ class LayerNormalization(Layer):
 
     def build(self, input_shape):
         self.gamma = self.add_weight(
-            name="gamma", shape=input_shape[-1:], initializer=Ones())
+            name="gamma", shape=input_shape[-1:], initializer="ones")
         self.beta = self.add_weight(
-            name="beta", shape=input_shape[-1:], initializer=Zeros())
+            name="beta", shape=input_shape[-1:], initializer="zeros")
         super(LayerNormalization, self).build(input_shape)
 
     def call(self, x):
@@ -180,6 +179,70 @@ class LayerNormalization(Layer):
 
     def compute_output_shape(self, input_shape):
         return input_shape
+
+
+class Embedding(Layer):
+    """
+    A custom `Embedding` layer implementation, that additionally takes a `pad_id` and keeps the embedding
+    for that token fixed to zero.
+
+    https://github.com/tensorflow/tensorflow/blob/r1.12/tensorflow/python/keras/layers/embeddings.py
+    """
+
+    def __init__(self,
+                 vocab_size,
+                 embedding_size,
+                 pad_id,
+                 embeddings_initializer="glorot_uniform",
+                 embeddings_regularizer=None,
+                 embeddings_constraint=None,
+                 **kwargs):
+        super(Embedding, self).__init__(**kwargs)
+        self.pad_id = pad_id
+        self.vocab_size = vocab_size
+        self.embedding_size = embedding_size
+        self.embeddings_initializer = embeddings_initializer
+        self.embeddings_regularizer = embeddings_regularizer
+        self.embeddings_constraint = embeddings_constraint
+
+    def build(self, input_shape):
+        self.pad_embeddings = self.add_weight(
+            shape=(1, self.embedding_size),
+            initializer="zeros",
+            name='pad_embeddings',
+            regularizer=self.embeddings_regularizer,
+            constraint=self.embeddings_constraint,
+            trainable=False)
+
+        embeddings = [self.pad_embeddings]
+
+        if self.pad_id > 0:
+            self.pre_pad_embeddings = self.add_weight(
+                shape=(self.pad_id, self.embedding_size),
+                initializer=self.embeddings_initializer,
+                name='pre_pad_embeddings',
+                regularizer=self.embeddings_regularizer,
+                constraint=self.embeddings_constraint)
+
+            embeddings.insert(0, self.pre_pad_embeddings)
+
+        if self.pad_id < self.vocab_size - 1:
+            self.post_pad_embeddings = self.add_weight(
+                shape=(self.vocab_size - self.pad_id - 1, self.embedding_size),
+                initializer=self.embeddings_initializer,
+                name='post_pad_embeddings',
+                regularizer=self.embeddings_regularizer,
+                constraint=self.embeddings_constraint)
+
+            embeddings.append(self.post_pad_embeddings)
+
+        self.embeddings = tf.concat(embeddings, axis=0)
+
+    def call(self, inputs):
+        dtype = Backend.dtype(inputs)
+        if dtype != "int32" and dtype != "int64":
+            inputs = tf.cast(inputs, "int32")
+        return tf.nn.embedding_lookup(self.embeddings, inputs)
 
 
 class EncoderLayer(Model):
@@ -466,12 +529,19 @@ class Transformer(Model):
 
         # NOTE: for embeddings, the `pad_id` values are not initialized to zero
         self.inp_embed = Embedding(
-            input_vocab_size, d_model, embeddings_initializer=initializer)
+            input_vocab_size,
+            d_model,
+            pad_id,
+            embeddings_initializer=initializer)
         self.tar_embed = Embedding(
-            target_vocab_size, d_model, embeddings_initializer=initializer)
+            target_vocab_size,
+            d_model,
+            pad_id,
+            embeddings_initializer=initializer)
 
         self.positional_encode = Lambda(
-            lambda t: positional_encoding(t, d_model), name="positional_encoding")
+            lambda t: positional_encoding(t, d_model),
+            name="positional_encoding")
 
     def call(self, inputs):
         """
