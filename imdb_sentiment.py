@@ -1,0 +1,89 @@
+"""
+imdb movie review sentiment prediction using the encoder
+"""
+
+import tensorflow as tf
+from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras.datasets import imdb
+from tensorflow.keras.layers import Dense, Input, Flatten, Lambda
+from tensorflow.keras.models import Model
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+
+from transformer import Encoder, Embedding, create_padding_mask
+
+tf.app.flags.DEFINE_string(
+    "model_dir", "models/sentiment",
+    "directory to save checkpoints and exported models")
+tf.app.flags.DEFINE_integer("vocab_size", 1024, "vocabulary size")
+tf.app.flags.DEFINE_integer("pad_id", 0, "pad id")
+tf.app.flags.DEFINE_integer("N", 1, "number of layers in the encoder")
+tf.app.flags.DEFINE_integer("seq_len", 256, "sequence length")
+tf.app.flags.DEFINE_integer("d_model", 128, "encoder model size")
+tf.app.flags.DEFINE_integer("d_ff", 512, "feedforward model size")
+tf.app.flags.DEFINE_integer("num_heads", 4, "number of attention heads")
+tf.app.flags.DEFINE_float("dropout", 0.1, "dropout")
+
+FLAGS = tf.app.flags.FLAGS
+
+
+def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
+    inp = Input((seq_len, ))
+    net = Embedding(vocab_size, d_model, pad_id)(inp)
+    mask = Lambda(lambda t: create_padding_mask(t, pad_id))(inp)
+    net = Encoder(
+        N=N, d_model=d_model, d_ff=d_ff, h=h, dropout=dropout)([net, mask])
+    net = Flatten()(net)
+    net = Dense(1, activation="sigmoid")(net)
+
+    model = Model(inp, net)
+
+    model.compile(
+        optimizer="adam", loss="binary_crossentropy", metrics=["acc"])
+
+    return model
+
+
+def run(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout, model_dir):
+    (x_train, y_train), (x_test, y_test) = imdb.load_data()
+
+    x_train = pad_sequences(
+        x_train,
+        maxlen=FLAGS.seq_len,
+        padding="post",
+        truncating="post",
+        value=FLAGS.pad_id)
+    x_test = pad_sequences(
+        x_test,
+        maxlen=FLAGS.seq_len,
+        padding="post",
+        truncating="post",
+        value=FLAGS.pad_id)
+
+    x_train[x_train >= FLAGS.vocab_size] = FLAGS.pad_id
+    x_test[x_test >= FLAGS.vocab_size] = FLAGS.pad_id
+
+    model = create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h,
+                         dropout)
+    model.summary()
+
+    model.fit(
+        x_train,
+        y_train,
+        epochs=10,
+        validation_data=(x_test, y_test),
+        callbacks=[
+            TensorBoard(
+                log_dir=model_dir,
+                histogram_freq=0,
+                write_graph=True,
+                write_images=True)
+        ])
+
+
+def main(_):
+    run(FLAGS.seq_len, FLAGS.vocab_size, FLAGS.pad_id, FLAGS.N, FLAGS.d_model,
+        FLAGS.d_ff, FLAGS.num_heads, FLAGS.dropout, FLAGS.model_dir)
+
+
+if __name__ == "__main__":
+    tf.app.run()

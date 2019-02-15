@@ -1,15 +1,17 @@
 """
 http://nlp.seas.harvard.edu/2018/04/03/attention.html
-
 +
-
 https://github.com/lilianweng/transformer-tensorflow
+
+NOTE:
+- both the encoder and the decoder do layer norm before the residual connection (Add),
+  instead of (Add + Norm) like in the paprt. That's how the harvardnlp implementation works. Haven't seen any
+  difference in accuracy/convergence time
 """
 
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import backend as Backend
-from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.layers import Add, Conv1D, Dense, Dropout, Lambda, Layer
 from tensorflow.keras.models import Model
 
@@ -194,6 +196,8 @@ class Embedding(Layer):
     for that token fixed to zero.
 
     https://github.com/tensorflow/tensorflow/blob/r1.12/tensorflow/python/keras/layers/embeddings.py
+
+    TODO: consider moving positional encoding inside this itself.
     """
 
     def __init__(self,
