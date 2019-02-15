@@ -47,20 +47,21 @@ class Attention(Layer):
 
         out = tf.matmul(Q, tf.transpose(
             K, [0, 2, 1]))  # [h * batch, q_size, k_size]
-        out = out / Backend.sqrt(Backend.cast(self.d_k, tf.float32))
+        out = out / np.sqrt(self.d_k)
 
         if self.use_mask:
-            out = tf.multiply(out, mask) + (1.0 - mask) * (-1e10)
+            # wherever mask is zero, replace value in tensor by -1e9
+            out = tf.multiply(out, mask) + tf.multiply((1.0 - mask), -1e9)
 
-        out = Backend.softmax(out)
+        p_attn = tf.nn.softmax(out, name="attention_weights")
 
         # https://github.com/tensorflow/tensorflow/blob/r1.12/tensorflow/python/keras/layers/core.py#L136
         out = tf.contrib.framework.smart_cond(
             Backend.learning_phase(),
-            lambda: Backend.dropout(out, self.dropout),
-            lambda: tf.identity(out))
+            lambda: Backend.dropout(p_attn, self.dropout),
+            lambda: tf.identity(p_attn))
 
-        out = tf.matmul(out, V)  # [h * batch, q_size, d_model]
+        out = tf.matmul(p_attn, V)  # [h * batch, q_size, d_model]
         return out
 
     def compute_output_shape(self, input_shape):
@@ -91,20 +92,26 @@ class MultiHeadAttention(Model):
 
         self.lq = Dense(
             d_model,
-            activation="relu",
+            activation=None,
             name="query",
             kernel_initializer=initializer,
             bias_initializer=initializer)
         self.lk = Dense(
             d_model,
-            activation="relu",
+            activation=None,
             name="key",
             kernel_initializer=initializer,
             bias_initializer=initializer)
         self.lv = Dense(
             d_model,
-            activation="relu",
+            activation=None,
             name="value",
+            kernel_initializer=initializer,
+            bias_initializer=initializer)
+        self.lf = Dense(
+            d_model,
+            activation=None,
+            name="final_output",
             kernel_initializer=initializer,
             bias_initializer=initializer)
 
@@ -152,7 +159,7 @@ class MultiHeadAttention(Model):
 
         out = self.joiner(out)
 
-        return out
+        return self.lf(out)
 
 
 class LayerNormalization(Layer):
@@ -175,7 +182,7 @@ class LayerNormalization(Layer):
     def call(self, x):
         mean = Backend.mean(x, axis=-1, keepdims=True)
         std = Backend.std(x, axis=-1, keepdims=True)
-        return self.gamma * (x - mean) / (std + self.eps) + self.beta
+        return self.gamma * ((x - mean) / (std + self.eps)) + self.beta
 
     def compute_output_shape(self, input_shape):
         return input_shape
@@ -242,7 +249,8 @@ class Embedding(Layer):
         dtype = Backend.dtype(inputs)
         if dtype != "int32" and dtype != "int64":
             inputs = tf.cast(inputs, "int32")
-        return tf.nn.embedding_lookup(self.embeddings, inputs)
+        out = tf.nn.embedding_lookup(self.embeddings, inputs)
+        return out * np.sqrt(self.embedding_size)
 
 
 class EncoderLayer(Model):
@@ -265,7 +273,8 @@ class EncoderLayer(Model):
         """
         super(EncoderLayer, self).__init__(**kwargs)
         self.add_1 = Add()
-        self.layer_norm_1 = LayerNormalization()
+        self.norm_1 = LayerNormalization()
+        self.dropout_1 = Dropout(dropout)
 
         self.attn = MultiHeadAttention(
             d_model, h, True, dropout, initializer=initializer)
@@ -281,9 +290,11 @@ class EncoderLayer(Model):
             kernel_size=1,
             kernel_initializer=initializer,
             bias_initializer=initializer)
+        self.ff_dropout = Dropout(dropout)
 
         self.add_2 = Add()
-        self.layer_norm_2 = LayerNormalization()
+        self.norm_2 = LayerNormalization()
+        self.dropout_2 = Dropout(dropout)
 
     def call(self, inputs):
         """
@@ -291,10 +302,16 @@ class EncoderLayer(Model):
         mask: [batch, seq_len, seq_len]
         """
         inp, mask = inputs
-        out = inp
-        out = self.layer_norm_1(
-            self.add_1([out, self.attn([out, out, out, mask])]))
-        out = self.layer_norm_2(self.add_2([out, self.feed_forward(out)]))
+
+        inp_norm = self.norm_1(inp)
+        out = self.add_1([
+            inp,
+            self.dropout_1(self.attn([inp_norm, inp_norm, inp_norm, mask]))
+        ])
+
+        out_norm = self.norm_2(out)
+        out = self.add_2([out, self.dropout_2(self.feed_forward(out_norm))])
+
         return out
 
     def feed_forward(self, out):
@@ -308,7 +325,7 @@ class EncoderLayer(Model):
         input:
             out: [batch, seq_len, d_model]
         """
-        out = self.conv_1(out)  # [batch, seq_len, d_ff]
+        out = self.ff_dropout(self.conv_1(out))  # [batch, seq_len, d_ff]
         return self.conv_2(out)  # [batch, seq_len, d_model]
 
 
@@ -337,6 +354,7 @@ class Encoder(Model):
             EncoderLayer(d_model, d_ff, h, dropout, initializer=initializer)
             for _ in range(N)
         ]
+        self.norm = LayerNormalization()
 
     def call(self, inputs):
         """
@@ -349,7 +367,7 @@ class Encoder(Model):
         for layer in self.encoder_layers:
             out = layer([out, mask])
 
-        return out
+        return self.norm(out)
 
 
 class DecoderLayer(Model):
@@ -373,13 +391,15 @@ class DecoderLayer(Model):
         """
         super(DecoderLayer, self).__init__(**kwargs)
         self.add_1 = Add()
-        self.layer_norm_1 = LayerNormalization()
+        self.norm_1 = LayerNormalization()
+        self.dropout_1 = Dropout(dropout)
 
         self.attn_1 = MultiHeadAttention(
             d_model, h, True, dropout, initializer=initializer)
 
         self.add_2 = Add()
-        self.layer_norm_2 = LayerNormalization()
+        self.norm_2 = LayerNormalization()
+        self.dropout_2 = Dropout(dropout)
 
         self.attn_2 = MultiHeadAttention(
             d_model, h, True, dropout, initializer=initializer)
@@ -395,9 +415,11 @@ class DecoderLayer(Model):
             kernel_size=1,
             kernel_initializer=initializer,
             bias_initializer=initializer)
+        self.ff_dropout = Dropout(dropout)
 
         self.add_3 = Add()
-        self.layer_norm_3 = LayerNormalization()
+        self.norm_3 = LayerNormalization()
+        self.dropout_3 = Dropout(dropout)
 
     def call(self, inputs):
         """
@@ -407,13 +429,24 @@ class DecoderLayer(Model):
         target_mask: [batch, seq_len, seq_len]
         """
         inp, memory, input_mask, target_mask = inputs
-        out = inp
-        out = self.layer_norm_1(
-            self.add_1([out, self.attn_1([out, out, out, target_mask])]))
-        out = self.layer_norm_2(
-            self.add_2([out,
-                        self.attn_2([out, memory, memory, input_mask])]))
-        out = self.layer_norm_3(self.add_3([out, self.feed_forward(out)]))
+
+        inp_norm = self.norm_1(inp)
+        out = self.add_1([
+            inp,
+            self.dropout_1(
+                self.attn_1([inp_norm, inp_norm, inp_norm, target_mask]))
+        ])
+
+        out_norm = self.norm_2(out)
+        out = self.add_2([
+            out,
+            self.dropout_2(
+                self.attn_2([out_norm, memory, memory, input_mask]))
+        ])
+
+        out_norm = self.norm_3(out)
+        out = self.add_3([out, self.dropout_3(self.feed_forward(out_norm))])
+
         return out
 
     def feed_forward(self, out):
@@ -427,7 +460,7 @@ class DecoderLayer(Model):
         input:
             out: [batch, seq_len, d_model]
         """
-        out = self.conv_1(out)  # [batch, seq_len, d_ff]
+        out = self.ff_dropout(self.conv_1(out))  # [batch, seq_len, d_ff]
         return self.conv_2(out)  # [batch, seq_len, d_model]
 
 
@@ -457,6 +490,7 @@ class Decoder(Model):
             DecoderLayer(d_model, d_ff, h, dropout, initializer=initializer)
             for _ in range(N)
         ]
+        self.norm = LayerNormalization()
 
     def call(self, inputs):
         """
@@ -471,7 +505,7 @@ class Decoder(Model):
         for layer in self.decoder_layers:
             out = layer([out, enc_out, input_mask, target_mask])
 
-        return out
+        return self.norm(out)
 
 
 class Transformer(Model):
