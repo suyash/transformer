@@ -22,6 +22,8 @@ tf.app.flags.DEFINE_integer("d_model", 128, "encoder model size")
 tf.app.flags.DEFINE_integer("d_ff", 512, "feedforward model size")
 tf.app.flags.DEFINE_integer("num_heads", 4, "number of attention heads")
 tf.app.flags.DEFINE_float("dropout", 0.1, "dropout")
+tf.app.flags.DEFINE_integer("batch size", 64, "batch size")
+tf.app.flags.DEFINE_integer("epochs", 10, "number of training epochs")
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -43,7 +45,8 @@ def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
     return model
 
 
-def run(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout, model_dir):
+def run(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout, model_dir,
+        batch_size, epochs):
     (x_train, y_train), (x_test, y_test) = imdb.load_data()
 
     x_train = pad_sequences(
@@ -69,7 +72,8 @@ def run(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout, model_dir):
     model.fit(
         x_train,
         y_train,
-        epochs=10,
+        batch_size=batch_size,
+        epochs=epochs,
         validation_data=(x_test, y_test),
         callbacks=[
             TensorBoard(
@@ -82,7 +86,8 @@ def run(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout, model_dir):
 
 def main(_):
     run(FLAGS.seq_len, FLAGS.vocab_size, FLAGS.pad_id, FLAGS.N, FLAGS.d_model,
-        FLAGS.d_ff, FLAGS.num_heads, FLAGS.dropout, FLAGS.model_dir)
+        FLAGS.d_ff, FLAGS.num_heads, FLAGS.dropout, FLAGS.model_dir,
+        FLAGS.batch_size, FLAGS.epochs)
 
 
 if __name__ == "__main__":
