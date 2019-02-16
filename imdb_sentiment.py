@@ -29,7 +29,8 @@ app.flags.DEFINE_integer("epochs", 10, "number of training epochs")
 def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
     inp = Input((seq_len, ))
     net = Embedding(vocab_size, d_model, pad_id)(inp)
-    mask = Lambda(lambda t: create_padding_mask(t, pad_id))(inp)
+    mask = Lambda(
+        lambda t: create_padding_mask(t, pad_id), name="input_mask")(inp)
     net = Encoder(
         N=N, d_model=d_model, d_ff=d_ff, h=h, dropout=dropout)([net, mask])
     net = Flatten()(net)
