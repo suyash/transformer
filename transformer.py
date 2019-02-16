@@ -58,6 +58,8 @@ class Attention(Layer):
         p_attn = tf.nn.softmax(out, name="attention_weights")
 
         # https://github.com/tensorflow/tensorflow/blob/r1.12/tensorflow/python/keras/layers/core.py#L136
+        # TODO: figure out why `tf.cond` isn't used for implementing the `Dropout` layer.
+        # NOTE: tf.cond seems to work without any visible difference, see the 2.0 branch.
         out = tf.contrib.framework.smart_cond(
             Backend.learning_phase(),
             lambda: Backend.dropout(p_attn, self.dropout),

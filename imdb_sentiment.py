@@ -43,6 +43,8 @@ def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
 
     # NOTE: keras optimizers cannot be saved with optimizer state
     # need to use an optimizer from `tf.train`
+    # NOTE: this seems to be a 1.0 thing, in 2.0 all tf.train optimizers are
+    # dropped and the keras versions are the only implementations
     model.compile(
         optimizer=tf.train.AdamOptimizer(),
         loss="binary_crossentropy",
