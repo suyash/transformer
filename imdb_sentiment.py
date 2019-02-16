@@ -39,8 +39,12 @@ def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
 
     model = Model(inp, net)
 
+    # NOTE: keras optimizers cannot be saved with optimizer state
+    # need to use an optimizer from `tf.train`
     model.compile(
-        optimizer="adam", loss="binary_crossentropy", metrics=["acc"])
+        optimizer=tf.train.AdamOptimizer(),
+        loss="binary_crossentropy",
+        metrics=["acc"])
 
     return model
 
