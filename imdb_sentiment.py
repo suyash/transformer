@@ -22,7 +22,7 @@ tf.app.flags.DEFINE_integer("d_model", 128, "encoder model size")
 tf.app.flags.DEFINE_integer("d_ff", 512, "feedforward model size")
 tf.app.flags.DEFINE_integer("num_heads", 4, "number of attention heads")
 tf.app.flags.DEFINE_float("dropout", 0.1, "dropout")
-tf.app.flags.DEFINE_integer("batch size", 64, "batch size")
+tf.app.flags.DEFINE_integer("batch_size", 64, "batch size")
 tf.app.flags.DEFINE_integer("epochs", 10, "number of training epochs")
 
 FLAGS = tf.app.flags.FLAGS
@@ -82,6 +82,9 @@ def run(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout, model_dir,
                 write_graph=True,
                 write_images=True)
         ])
+
+    model.save_weights("%s/weights/model_weights" % model_dir)
+    # tf.contrib.saved_model.save_keras_model(model, "%s/saved_model" % model_dir, serving_only=True)
 
 
 def main(_):
