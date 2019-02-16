@@ -2,6 +2,8 @@
 imdb movie review sentiment prediction using the encoder
 """
 
+from absl import app, flags
+
 import tensorflow as tf
 from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.datasets import imdb
@@ -11,21 +13,21 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 from transformer import Encoder, Embedding, create_padding_mask
 
-tf.app.flags.DEFINE_string(
+app.flags.DEFINE_string(
     "model_dir", "models/sentiment",
     "directory to save checkpoints and exported models")
-tf.app.flags.DEFINE_integer("vocab_size", 1024, "vocabulary size")
-tf.app.flags.DEFINE_integer("pad_id", 0, "pad id")
-tf.app.flags.DEFINE_integer("N", 1, "number of layers in the encoder")
-tf.app.flags.DEFINE_integer("seq_len", 256, "sequence length")
-tf.app.flags.DEFINE_integer("d_model", 128, "encoder model size")
-tf.app.flags.DEFINE_integer("d_ff", 512, "feedforward model size")
-tf.app.flags.DEFINE_integer("num_heads", 4, "number of attention heads")
-tf.app.flags.DEFINE_float("dropout", 0.1, "dropout")
-tf.app.flags.DEFINE_integer("batch_size", 64, "batch size")
-tf.app.flags.DEFINE_integer("epochs", 10, "number of training epochs")
+app.flags.DEFINE_integer("vocab_size", 1024, "vocabulary size")
+app.flags.DEFINE_integer("pad_id", 0, "pad id")
+app.flags.DEFINE_integer("N", 1, "number of layers in the encoder")
+app.flags.DEFINE_integer("seq_len", 256, "sequence length")
+app.flags.DEFINE_integer("d_model", 128, "encoder model size")
+app.flags.DEFINE_integer("d_ff", 512, "feedforward model size")
+app.flags.DEFINE_integer("num_heads", 4, "number of attention heads")
+app.flags.DEFINE_float("dropout", 0.1, "dropout")
+app.flags.DEFINE_integer("batch_size", 64, "batch size")
+app.flags.DEFINE_integer("epochs", 10, "number of training epochs")
 
-FLAGS = tf.app.flags.FLAGS
+FLAGS = flags.FLAGS
 
 
 def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
@@ -98,4 +100,4 @@ def main(_):
 
 
 if __name__ == "__main__":
-    tf.app.run()
+    app.run(main)
