@@ -3,7 +3,6 @@ imdb movie review sentiment prediction using the encoder
 """
 
 from absl import app, flags
-
 import tensorflow as tf
 from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.datasets import imdb
@@ -13,9 +12,8 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 from transformer import Encoder, Embedding, create_padding_mask
 
-app.flags.DEFINE_string(
-    "model_dir", "models/sentiment",
-    "directory to save checkpoints and exported models")
+app.flags.DEFINE_string("model_dir", "models/sentiment",
+                        "directory to save checkpoints and exported models")
 app.flags.DEFINE_integer("vocab_size", 1024, "vocabulary size")
 app.flags.DEFINE_integer("pad_id", 0, "pad id")
 app.flags.DEFINE_integer("N", 1, "number of layers in the encoder")
@@ -26,8 +24,6 @@ app.flags.DEFINE_integer("num_heads", 4, "number of attention heads")
 app.flags.DEFINE_float("dropout", 0.1, "dropout")
 app.flags.DEFINE_integer("batch_size", 64, "batch size")
 app.flags.DEFINE_integer("epochs", 10, "number of training epochs")
-
-FLAGS = flags.FLAGS
 
 
 def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
@@ -59,19 +55,19 @@ def run(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout, model_dir,
 
     x_train = pad_sequences(
         x_train,
-        maxlen=FLAGS.seq_len,
+        maxlen=seq_len,
         padding="post",
         truncating="post",
-        value=FLAGS.pad_id)
+        value=pad_id)
     x_test = pad_sequences(
         x_test,
-        maxlen=FLAGS.seq_len,
+        maxlen=seq_len,
         padding="post",
         truncating="post",
-        value=FLAGS.pad_id)
+        value=pad_id)
 
-    x_train[x_train >= FLAGS.vocab_size] = FLAGS.pad_id
-    x_test[x_test >= FLAGS.vocab_size] = FLAGS.pad_id
+    x_train[x_train >= vocab_size] = pad_id
+    x_test[x_test >= vocab_size] = pad_id
 
     model = create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h,
                          dropout)
@@ -96,6 +92,7 @@ def run(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout, model_dir,
 
 
 def main(_):
+    FLAGS = flags.FLAGS
     run(FLAGS.seq_len, FLAGS.vocab_size, FLAGS.pad_id, FLAGS.N, FLAGS.d_model,
         FLAGS.d_ff, FLAGS.num_heads, FLAGS.dropout, FLAGS.model_dir,
         FLAGS.batch_size, FLAGS.epochs)
