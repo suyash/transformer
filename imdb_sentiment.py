@@ -50,8 +50,19 @@ def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
     return model
 
 
-def run(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout, model_dir,
-        batch_size, epochs):
+def run(
+        model_dir,
+        seq_len=256,
+        vocab_size=2048,
+        pad_id=0,
+        N=2,
+        d_model=128,
+        d_ff=512,
+        h=8,
+        dropout=0.5,
+        batch_size=500,
+        epochs=100,
+):
     (x_train, y_train), (x_test, y_test) = imdb.load_data()
 
     x_train = pad_sequences(
@@ -94,8 +105,8 @@ def run(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout, model_dir,
 
 def main(_):
     FLAGS = flags.FLAGS
-    run(FLAGS.seq_len, FLAGS.vocab_size, FLAGS.pad_id, FLAGS.N, FLAGS.d_model,
-        FLAGS.d_ff, FLAGS.num_heads, FLAGS.dropout, FLAGS.model_dir,
+    run(FLAGS.model_dir, FLAGS.seq_len, FLAGS.vocab_size, FLAGS.pad_id,
+        FLAGS.N, FLAGS.d_model, FLAGS.d_ff, FLAGS.num_heads, FLAGS.dropout,
         FLAGS.batch_size, FLAGS.epochs)
 
 
