@@ -9,6 +9,8 @@ NOTE:
   difference in accuracy/convergence time
 """
 
+import math
+
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import backend as Backend
@@ -257,6 +259,42 @@ class Embedding(Layer):
             inputs = tf.cast(inputs, "int32")
         out = tf.nn.embedding_lookup(self.embeddings, inputs)
         return out * np.sqrt(self.embedding_size)
+
+
+class PositionalEncoding(Layer):
+    """
+    https://github.com/tensorflow/tensor2tensor/blob/164d26baf74aa0ac5ab585d02f84b224ab86c129/tensor2tensor/layers/common_attention.py#L403-L449
+    """
+
+    def __init__(self, d_model, min_timescale=1.0, max_timescale=1.0e4):
+        super(PositionalEncoding, self).__init__()
+        self.d_model = d_model
+        self.min_timescale = min_timescale
+        self.max_timescale = max_timescale
+
+    def call(self, inputs):
+        shape = tf.shape(inputs)
+        batch_size, seq_len = shape[0], shape[1]
+
+        positions = tf.to_float(tf.range(seq_len))
+        num_timescales = self.d_model // 2
+        log_timescale_increment = (
+            math.log(float(self.max_timescale) / float(self.min_timescale)) /
+            tf.maximum(tf.to_float(num_timescales) - 1, 1))
+        inv_timescales = self.min_timescale * tf.exp(
+            tf.to_float(tf.range(num_timescales)) * -log_timescale_increment)
+        scaled_time = tf.expand_dims(positions, 1) * tf.expand_dims(
+            inv_timescales, 0)
+
+        # https://stackoverflow.com/a/46439976/3673043
+        signal = tf.concat([
+            tf.expand_dims(tf.sin(scaled_time), -1),
+            tf.expand_dims(tf.cos(scaled_time), -1)
+        ],
+                           axis=2)
+        signal = tf.reshape(signal, [-1, self.d_model])
+
+        return tf.tile(tf.expand_dims(signal, 0), [batch_size, 1, 1])
 
 
 class EncoderLayer(Model):
@@ -578,9 +616,7 @@ class Transformer(Model):
             pad_id,
             embeddings_initializer=initializer)
 
-        self.positional_encode = Lambda(
-            lambda t: positional_encoding(t, d_model),
-            name="positional_encoding")
+        self.positional_encode = PositionalEncoding(d_model)
 
     def call(self, inputs):
         """
@@ -638,24 +674,3 @@ def create_subsequent_mask(inp):
     mask = tf.convert_to_tensor(tri_matrix, dtype=tf.float32)
     mask = tf.tile(tf.expand_dims(mask, 0), [tf.shape(inp)[0], 1, 1])
     return mask
-
-
-def positional_encoding(inp, d_model):
-    """
-    sinusoidal positional encoding for the inputs
-
-    inp: [batch_size, seq_len]
-
-    returns: [batch_size, seq_len, d_model]
-    """
-    seq_len = inp.shape.as_list()[1]
-
-    encoding = np.array([[
-        pos / np.power(10000.0, 2.0 * (i // 2) / d_model)
-        for i in range(d_model)
-    ] for pos in range(seq_len)])
-    encoding[:, 0::2] = np.sin(encoding[:, 0::2])
-    encoding[:, 1::2] = np.cos(encoding[:, 1::2])
-
-    encoding = tf.convert_to_tensor(encoding, dtype=tf.float32)
-    return tf.tile(tf.expand_dims(encoding, 0), [tf.shape(inp)[0], 1, 1])

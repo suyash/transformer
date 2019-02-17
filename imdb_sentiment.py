@@ -6,11 +6,11 @@ from absl import app, flags
 import tensorflow as tf
 from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.datasets import imdb
-from tensorflow.keras.layers import Dense, Input, Flatten, Lambda
+from tensorflow.keras.layers import Add, Dense, Dropout, Flatten, Input, Lambda
 from tensorflow.keras.models import Model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
-from transformer import Encoder, Embedding, create_padding_mask
+from transformer import Encoder, Embedding, create_padding_mask, PositionalEncoding
 
 app.flags.DEFINE_string("model_dir", "models/sentiment",
                         "directory to save checkpoints and exported models")
@@ -21,14 +21,17 @@ app.flags.DEFINE_integer("seq_len", 256, "sequence length")
 app.flags.DEFINE_integer("d_model", 128, "encoder model size")
 app.flags.DEFINE_integer("d_ff", 512, "feedforward model size")
 app.flags.DEFINE_integer("num_heads", 4, "number of attention heads")
-app.flags.DEFINE_float("dropout", 0.1, "dropout")
-app.flags.DEFINE_integer("batch_size", 64, "batch size")
-app.flags.DEFINE_integer("epochs", 10, "number of training epochs")
+app.flags.DEFINE_float("dropout", 0.5, "dropout")
+app.flags.DEFINE_integer("batch_size", 50, "batch size")
+app.flags.DEFINE_integer("epochs", 25, "number of training epochs")
 
 
 def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
     inp = Input((seq_len, ))
-    net = Embedding(vocab_size, d_model, pad_id)(inp)
+    embedding = Embedding(vocab_size, d_model, pad_id)(inp)
+    encoding = PositionalEncoding(d_model)(inp)
+    net = Add()([embedding, encoding])
+    net = Dropout(dropout)(net)
     mask = Lambda(
         lambda t: create_padding_mask(t, pad_id), name="input_mask")(inp)
     net = Encoder(
