@@ -63,8 +63,8 @@ def run(
         d_ff=512,
         h=8,
         dropout=0.5,
-        batch_size=500,
-        epochs=100,
+        batch_size=250,
+        epochs=25,
 ):
     (x_train, y_train), (x_test, y_test) = imdb.load_data()
 
@@ -88,6 +88,9 @@ def run(
                          dropout)
     model.summary()
 
+    x_eval, y_eval = x_train[:6250], y_train[:6250]
+    x_train, y_train = x_train[6250:], y_train[6250:]
+
     model.fit(
         x_train,
         y_train,
@@ -101,6 +104,8 @@ def run(
                 write_graph=True,
                 write_images=True)
         ])
+
+    print("Test Accuracy: %f" % model.evaluate(x_test, y_test))
 
     model.save_weights("%s/weights/model_weights" % model_dir)
     # tf.contrib.saved_model.save_keras_model(model, "%s/saved_model" % model_dir, serving_only=True)
