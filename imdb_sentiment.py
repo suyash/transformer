@@ -3,6 +3,8 @@ imdb movie review sentiment prediction using the encoder
 """
 
 from absl import app, flags
+import numpy as np
+from sklearn.model_selection import train_test_split
 import tensorflow as tf
 from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.datasets import imdb
@@ -14,15 +16,15 @@ from transformer import Encoder, Embedding, create_padding_mask, PositionalEncod
 
 app.flags.DEFINE_string("model_dir", "models/sentiment",
                         "directory to save checkpoints and exported models")
-app.flags.DEFINE_integer("vocab_size", 1024, "vocabulary size")
+app.flags.DEFINE_integer("vocab_size", 2048, "vocabulary size")
 app.flags.DEFINE_integer("pad_id", 0, "pad id")
-app.flags.DEFINE_integer("N", 1, "number of layers in the encoder")
+app.flags.DEFINE_integer("N", 2, "number of layers in the encoder")
 app.flags.DEFINE_integer("seq_len", 256, "sequence length")
 app.flags.DEFINE_integer("d_model", 128, "encoder model size")
 app.flags.DEFINE_integer("d_ff", 512, "feedforward model size")
-app.flags.DEFINE_integer("num_heads", 4, "number of attention heads")
+app.flags.DEFINE_integer("num_heads", 8, "number of attention heads")
 app.flags.DEFINE_float("dropout", 0.5, "dropout")
-app.flags.DEFINE_integer("batch_size", 50, "batch size")
+app.flags.DEFINE_integer("batch_size", 250, "batch size")
 app.flags.DEFINE_integer("epochs", 25, "number of training epochs")
 
 
@@ -37,7 +39,7 @@ def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
     net = Encoder(
         N=N, d_model=d_model, d_ff=d_ff, h=h, dropout=dropout)([net, mask])
     net = Flatten()(net)
-    net = Dense(1, activation="sigmoid")(net)
+    net = Dense(2, activation="softmax")(net)
 
     model = Model(inp, net)
 
@@ -47,7 +49,7 @@ def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
     # dropped and the keras versions are the only implementations
     model.compile(
         optimizer=tf.train.AdamOptimizer(),
-        loss="binary_crossentropy",
+        loss="categorical_crossentropy",
         metrics=["acc"])
 
     return model
@@ -55,31 +57,26 @@ def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
 
 def run(
         model_dir,
-        seq_len=256,
-        vocab_size=2048,
-        pad_id=0,
-        N=2,
-        d_model=128,
-        d_ff=512,
-        h=8,
-        dropout=0.5,
-        batch_size=250,
-        epochs=25,
+        seq_len,
+        vocab_size,
+        pad_id,
+        N,
+        d_model,
+        d_ff,
+        h,
+        dropout,
+        batch_size,
+        epochs,
 ):
     (x_train, y_train), (x_test, y_test) = imdb.load_data()
 
     x_train = pad_sequences(
-        x_train,
-        maxlen=seq_len,
-        padding="post",
-        truncating="post",
-        value=pad_id)
+        x_train, maxlen=seq_len, padding="pre", truncating="pre", value=pad_id)
     x_test = pad_sequences(
-        x_test,
-        maxlen=seq_len,
-        padding="post",
-        truncating="post",
-        value=pad_id)
+        x_test, maxlen=seq_len, padding="pre", truncating="pre", value=pad_id)
+
+    y_train = np.eye(2)[y_train.astype(np.int32)]
+    y_test = np.eye(2)[y_test.astype(np.int32)]
 
     x_train[x_train >= vocab_size] = pad_id
     x_test[x_test >= vocab_size] = pad_id
@@ -88,15 +85,15 @@ def run(
                          dropout)
     model.summary()
 
-    x_eval, y_eval = x_train[:6250], y_train[:6250]
-    x_train, y_train = x_train[6250:], y_train[6250:]
+    x_train, x_eval, y_train, y_eval = train_test_split(
+        x_train, y_train, test_size=0.25, random_state=1)
 
     model.fit(
         x_train,
         y_train,
         batch_size=batch_size,
         epochs=epochs,
-        validation_data=(x_test, y_test),
+        validation_data=(x_eval, y_eval),
         callbacks=[
             TensorBoard(
                 log_dir=model_dir,
