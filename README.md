@@ -22,3 +22,7 @@ model.load_weights(weights_dir)
 still works.
 
 [Relevant StackOverflow Thread](https://stackoverflow.com/questions/51806852/cant-save-custom-subclassed-model)
+
+## TODO
+
+- Custom Adam Implementation with learning rate schedule as described in the paper.
