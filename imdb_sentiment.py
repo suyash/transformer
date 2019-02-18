@@ -25,7 +25,7 @@ app.flags.DEFINE_integer("d_ff", 512, "feedforward model size")
 app.flags.DEFINE_integer("num_heads", 8, "number of attention heads")
 app.flags.DEFINE_float("dropout", 0.5, "dropout")
 app.flags.DEFINE_integer("batch_size", 250, "batch size")
-app.flags.DEFINE_integer("epochs", 25, "number of training epochs")
+app.flags.DEFINE_integer("epochs", 50, "number of training epochs")
 
 
 def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
@@ -102,7 +102,7 @@ def run(
                 write_images=True)
         ])
 
-    print("Test Accuracy: %f" % model.evaluate(x_test, y_test))
+    print("Test Results:", model.evaluate(x_test, y_test))
 
     model.save_weights("%s/weights/model_weights" % model_dir)
     # tf.contrib.saved_model.save_keras_model(model, "%s/saved_model" % model_dir, serving_only=True)

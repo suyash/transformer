@@ -2,3 +2,5 @@ __pycache__
 .vscode
 models
 .DS_Store
+.ipynb_checkpoints
+*.npy
