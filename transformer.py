@@ -21,6 +21,8 @@ from tensorflow.keras.models import Model
 class Attention(Layer):
     """
     Scaled Dot Product Attention
+
+    This layer has two outputs, the first is the attended value, and the second is the attention weights.
     """
 
     def __init__(self, d_k, use_mask, dropout, **kwargs):
@@ -42,7 +44,9 @@ class Attention(Layer):
         V: [h * batch, k_size, d_model]
         mask?: [h * batch, q_size, k_size]
 
-        [h * batch, q_size, d_model]
+        returns:
+        - output: [h * batch, q_size, d_model]
+        - attention weights: [h * batch, q_size, k_size]
         """
 
         Q, K, V = inputs[0], inputs[1], inputs[2]
@@ -68,7 +72,7 @@ class Attention(Layer):
             lambda: tf.identity(p_attn))
 
         out = tf.matmul(p_attn, V)  # [h * batch, q_size, d_model]
-        return out
+        return [out, p_attn]
 
     def compute_output_shape(self, input_shape):
         return input_shape[0]
@@ -159,9 +163,9 @@ class MultiHeadAttention(Model):
 
         if self.use_mask:
             mask = self.mask_expander(mask)
-            out = self.attention([Q_split, K_split, V_split, mask])
+            out, _ = self.attention([Q_split, K_split, V_split, mask])
         else:
-            out = self.attention([Q_split, K_split, V_split])
+            out, _ = self.attention([Q_split, K_split, V_split])
 
         out = self.joiner(out)
 
