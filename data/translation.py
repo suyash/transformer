@@ -133,7 +133,7 @@ def _file_to_dataset(filepath, word2id, seq_len):
     # table = tf.contrib.lookup.index_table_from_tensor(mapping=target_id2word, default_value=UNKNOWN_ID)
     # data = data.map(lambda line: tf.SparseTensor(line.indices, table.lookup(line.values), line.dense_shape))
 
-    map_fn = lambda w: tf.py_func(lambda x: np.int32(word2id.get(x.decode("ascii"), UNKNOWN_ID)), w, tf.int32)
+    map_fn = lambda w: tf.py_func(lambda x: np.int32(word2id.get(x.decode("utf-8"), UNKNOWN_ID)), w, tf.int32)
     data = data.map(
         lambda line: tf.SparseTensor(line.indices, tf.map_fn(map_fn, [line.values], tf.int32), line.dense_shape))
     data = data.map(
@@ -148,11 +148,10 @@ def _file_to_dataset(filepath, word2id, seq_len):
     return data
 
 
-def datasets(dataset, source_word2id, target_word2id, seq_len):
-    source_file = "data/%s/%s.%s" % (dataset, config[dataset]["train"],
-                                     config[dataset]["source_lang"])
-    target_file = "data/%s/%s.%s" % (dataset, config[dataset]["train"],
-                                     config[dataset]["target_lang"])
+def _dataset(basefilepath, source_lang, target_lang, source_word2id,
+             target_word2id, seq_len):
+    source_file = "%s.%s" % (basefilepath, source_lang)
+    target_file = "%s.%s" % (basefilepath, target_lang)
 
     source_dataset = _file_to_dataset(source_file, source_word2id, seq_len)
     target_dataset = _file_to_dataset(target_file, target_word2id, seq_len)
@@ -163,7 +162,19 @@ def datasets(dataset, source_word2id, target_word2id, seq_len):
     return dataset
 
 
-if __name__ == "__main__":
-    ((source_word2id, source_id2word), (target_word2id,
-                                        target_id2word)) = load_vocab("wmt14")
-    print(len(source_word2id), len(target_word2id))
+def datasets(dataset, source_word2id, target_word2id, seq_len):
+    train_data = _dataset("data/%s/%s" % (dataset, config[dataset]["train"]),
+                          config[dataset]["source_lang"],
+                          config[dataset]["target_lang"], source_word2id,
+                          target_word2id, seq_len)
+
+    test_datasets = list(
+        map(
+            lambda f: _dataset("data/%s/%s" % (dataset, f), config[dataset]["source_lang"], config[dataset]["target_lang"], source_word2id, target_word2id, seq_len),
+            config[dataset]["test"]))
+
+    test_data = test_datasets[0]
+    for i in range(1, len(test_datasets)):
+        test_data = test_data.concatenate(test_datasets[i])
+
+    return train_data, test_data
