@@ -47,8 +47,13 @@ def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
     # need to use an optimizer from `tf.train`
     # NOTE: this seems to be a 1.0 thing, in 2.0 all tf.train optimizers are
     # dropped and the keras versions are the only implementations
+    # NOTE: this is not recommended for training, the paper authors describe
+    # a variable learning rate schedule, that still needs to be implemented.
+    optimizer = tf.train.AdamOptimizer(learning_rate=0.001,
+                                           beta1=0.9, beta2=0.98, epsilon=1e-9)
+
     model.compile(
-        optimizer=tf.train.AdamOptimizer(),
+        optimizer=optimizer,
         loss="categorical_crossentropy",
         metrics=["acc"])
 
