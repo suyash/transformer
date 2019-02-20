@@ -4,9 +4,12 @@ http://nlp.seas.harvard.edu/2018/04/03/attention.html
 https://github.com/lilianweng/transformer-tensorflow
 
 NOTE:
-- both the encoder and the decoder do layer norm before the residual connection (Add),
-  instead of (Add + Norm) like in the paprt. That's how the harvardnlp implementation works. Haven't seen any
-  difference in accuracy/convergence time
+- both the encoder and the decoder do layer norm at the input,
+  instead of (Add + Norm) at the output.
+  The final output for both encoder and decoder is after layer norm.
+  That's how the harvardnlp implementation works.
+  The basic difference is that there is an additional layer norm
+  layer at the input.
 """
 
 import math

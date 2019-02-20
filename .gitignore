@@ -4,3 +4,4 @@ models
 .DS_Store
 .ipynb_checkpoints
 *.npy
+data/wmt14
