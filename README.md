@@ -26,3 +26,5 @@ still works.
 ## TODO
 
 - Custom Adam Implementation with learning rate schedule as described in the paper.
+
+- byte-pair encoding for translation inputs. Currently, with default vocab on wmt14, the model gets to 107,248,227 parameters, which is significantly higher than the paper which reports 65M parameters for the base model.

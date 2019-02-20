@@ -49,13 +49,11 @@ def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
     # dropped and the keras versions are the only implementations
     # NOTE: this is not recommended for training, the paper authors describe
     # a variable learning rate schedule, that still needs to be implemented.
-    optimizer = tf.train.AdamOptimizer(learning_rate=0.001,
-                                           beta1=0.9, beta2=0.98, epsilon=1e-9)
+    optimizer = tf.train.AdamOptimizer(
+        learning_rate=0.001, beta1=0.9, beta2=0.98, epsilon=1e-9)
 
     model.compile(
-        optimizer=optimizer,
-        loss="categorical_crossentropy",
-        metrics=["acc"])
+        optimizer=optimizer, loss="categorical_crossentropy", metrics=["acc"])
 
     return model
 

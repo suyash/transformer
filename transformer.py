@@ -577,7 +577,6 @@ class Transformer(Model):
                  d_model=512,
                  d_ff=2048,
                  h=8,
-                 label_smoothing_epsilon=0.1,
                  dropout=0.1,
                  initializer="glorot_uniform",
                  **kwargs):
@@ -627,10 +626,6 @@ class Transformer(Model):
 
         self.positional_encode = PositionalEncoding(d_model)
 
-        self.label_smoothing_epsilon = label_smoothing_epsilon
-        self.add_label_smoothing = Lambda(
-            self.label_smoothing, name="label_smoothing")
-
     def call(self, inputs):
         """
         enc_inp: [batch_size, seq_len]
@@ -652,15 +647,7 @@ class Transformer(Model):
         dec_out = self.decoder([dec_inp, enc_out, inp_mask, tar_mask])
 
         logits = self.logits_layer(dec_out)
-        logits = self.add_label_smoothing(logits)
         return logits
-
-    def label_smoothing(self, inp):
-        """
-        https://github.com/lilianweng/transformer-tensorflow/blob/master/transformer.py#L437
-        """
-        return (1.0 - self.label_smoothing_epsilon) * inp + (
-            self.label_smoothing_epsilon / self.target_vocab_size)
 
 
 def create_padding_mask(inp, pad_id):
@@ -695,3 +682,11 @@ def create_subsequent_mask(inp):
     mask = tf.convert_to_tensor(tri_matrix, dtype=tf.float32)
     mask = tf.tile(tf.expand_dims(mask, 0), [tf.shape(inp)[0], 1, 1])
     return mask
+
+
+def label_smoothing(inp, label_smoothing_epsilon, target_vocab_size):
+    """
+    https://github.com/lilianweng/transformer-tensorflow/blob/master/transformer.py#L437
+    """
+    return (1.0 - label_smoothing_epsilon) * inp + (
+        label_smoothing_epsilon / target_vocab_size)
