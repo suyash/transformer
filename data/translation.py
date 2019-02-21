@@ -162,16 +162,20 @@ def _dataset(basefilepath, source_lang, target_lang, source_word2id,
     return dataset
 
 
-def datasets(dataset, source_word2id, target_word2id, seq_len):
+def datasets(dataset, source_word2id, target_word2id, seq_len,
+             test_files=None):
     train_data = _dataset("data/%s/%s" % (dataset, config[dataset]["train"]),
                           config[dataset]["source_lang"],
                           config[dataset]["target_lang"], source_word2id,
                           target_word2id, seq_len)
 
+    if test_files == None:
+        test_files = config[dataset]["test"]
+
     test_datasets = list(
         map(
             lambda f: _dataset("data/%s/%s" % (dataset, f), config[dataset]["source_lang"], config[dataset]["target_lang"], source_word2id, target_word2id, seq_len),
-            config[dataset]["test"]))
+            test_files))
 
     test_data = test_datasets[0]
     for i in range(1, len(test_datasets)):

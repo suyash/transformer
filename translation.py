@@ -81,8 +81,12 @@ def run(
     source_vocab_size, target_vocab_size = len(source_id2word), len(
         target_id2word)
 
-    train_data, test_data = datasets(dataset, source_word2id, target_word2id,
-                                     seq_len)
+    train_data, test_data = datasets(
+        dataset,
+        source_word2id,
+        target_word2id,
+        seq_len,
+        test_files=["newstest2013"])
 
     train_data = train_data.map(
         lambda s, t: ((s[1:], t[:-1]), label_smoothing(tf.one_hot(t[1:], depth=target_vocab_size), label_smoothing_epsilon, target_vocab_size)))
