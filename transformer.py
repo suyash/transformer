@@ -42,13 +42,13 @@ class Attention(Layer):
 
     def call(self, inputs):
         """
-        Q: [h * batch, q_size, d_model]
-        K: [h * batch, k_size, d_model]
-        V: [h * batch, k_size, d_model]
+        Q: [h * batch, q_size, d_model // h]
+        K: [h * batch, k_size, d_model // h]
+        V: [h * batch, k_size, d_model // h]
         mask?: [h * batch, q_size, k_size]
 
         returns:
-        - output: [h * batch, q_size, d_model]
+        - output: [h * batch, q_size, d_model // h]
         - attention weights: [h * batch, q_size, k_size]
         """
 
@@ -77,7 +77,7 @@ class Attention(Layer):
         return [out, p_attn]
 
     def compute_output_shape(self, input_shape):
-        return input_shape[0]
+        return [input_shape[0], (None, input_shape[0][1], input_shape[1][1])]
 
 
 class MultiHeadAttention(Model):
@@ -173,6 +173,9 @@ class MultiHeadAttention(Model):
 
         return self.lf(out)
 
+    def compute_output_shape(self, input_shape):
+        return input_shape[0]
+
 
 class LayerNormalization(Layer):
     """
@@ -266,6 +269,9 @@ class Embedding(Layer):
         out = tf.nn.embedding_lookup(self.embeddings, inputs)
         return out * np.sqrt(self.embedding_size)
 
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[1], self.embedding_size)
+
 
 class PositionalEncoding(Layer):
     """
@@ -279,6 +285,10 @@ class PositionalEncoding(Layer):
         self.max_timescale = max_timescale
 
     def call(self, inputs):
+        """
+        inputs: [batch_size, seq_len]
+        outputs: [batch_size, seq_len, d_model]
+        """
         shape = tf.shape(inputs)
         batch_size, seq_len = shape[0], shape[1]
 
@@ -301,6 +311,9 @@ class PositionalEncoding(Layer):
         signal = tf.reshape(signal, [-1, self.d_model])
 
         return tf.tile(tf.expand_dims(signal, 0), [batch_size, 1, 1])
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[1], self.d_model)
 
 
 class EncoderLayer(Model):
@@ -350,6 +363,8 @@ class EncoderLayer(Model):
         """
         inp: [batch, seq_len, d_model]
         mask: [batch, seq_len, seq_len]
+
+        output: [batch_size, seq_len, d_model]
         """
         inp, mask = inputs
 
@@ -377,6 +392,9 @@ class EncoderLayer(Model):
         """
         out = self.ff_dropout(self.conv_1(out))  # [batch, seq_len, d_ff]
         return self.conv_2(out)  # [batch, seq_len, d_model]
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[0]
 
 
 class Encoder(Model):
@@ -418,6 +436,9 @@ class Encoder(Model):
             out = layer([out, mask])
 
         return self.norm(out)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[0]
 
 
 class DecoderLayer(Model):
@@ -473,10 +494,12 @@ class DecoderLayer(Model):
 
     def call(self, inputs):
         """
-        inp: [batch, seq_len, d_model]
-        memory: [batch, seq_len, d_model]
-        input_mask: [batch, seq_len, seq_len]
-        target_mask: [batch, seq_len, seq_len]
+        inp: [batch_size, target_seq_len, d_model]
+        memory: [batch_size, input_seq_len, d_model]
+        input_mask: [batch_size, target_seq_len, input_seq_len]
+        target_mask: [batch_size, target_seq_len, target_seq_len]
+
+        output: [batch_size, target_seq_len, d_model]
         """
         inp, memory, input_mask, target_mask = inputs
 
@@ -512,6 +535,9 @@ class DecoderLayer(Model):
         """
         out = self.ff_dropout(self.conv_1(out))  # [batch, seq_len, d_ff]
         return self.conv_2(out)  # [batch, seq_len, d_model]
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[0]
 
 
 class Decoder(Model):
@@ -556,6 +582,9 @@ class Decoder(Model):
             out = layer([out, enc_out, input_mask, target_mask])
 
         return self.norm(out)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[0]
 
 
 class Transformer(Model):
@@ -628,8 +657,8 @@ class Transformer(Model):
 
     def call(self, inputs):
         """
-        enc_inp: [batch_size, seq_len]
-        dec_inp: [batch_size, seq_len]
+        enc_inp: [batch_size, input_seq_len]
+        dec_inp: [batch_size, target_seq_len]
         """
         enc_inp, dec_inp = inputs
 
@@ -648,6 +677,9 @@ class Transformer(Model):
 
         logits = self.logits_layer(dec_out)
         return logits
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[1][0], input_shape[1][1], self.target_vocab_size)
 
 
 def create_padding_mask(inp, pad_id):
