@@ -16,9 +16,9 @@ import math
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras import backend as Backend
-from tensorflow.keras.layers import Add, Conv1D, Dense, Dropout, Lambda, Layer
-from tensorflow.keras.models import Model
+from keras import backend as Backend
+from keras.layers import Add, Conv1D, Dense, Dropout, Lambda, Layer
+from keras.models import Model
 
 
 class Attention(Layer):
@@ -70,9 +70,8 @@ class Attention(Layer):
         # TODO: figure out why `tf.cond` isn't used for implementing the `Dropout` layer.
         # NOTE: tf.cond seems to work without any visible difference, see the 2.0 branch.
         out = tf.contrib.framework.smart_cond(
-            Backend.learning_phase(),
-            lambda: Backend.dropout(p_attn, self.dropout),
-            lambda: tf.identity(p_attn))
+            Backend.learning_phase(), lambda: Backend.dropout(
+                p_attn, self.dropout), lambda: tf.identity(p_attn))
 
         out = tf.matmul(p_attn, V)  # [h * batch, q_size, d_model]
         return [out, p_attn]
@@ -605,7 +604,8 @@ class Transformer(Model):
         self.input_mask_layer = Lambda(
             lambda t: create_padding_mask(t, pad_id), name="input_mask")
         self.target_mask_layer = Lambda(
-            lambda t: create_padding_mask(t, pad_id) * create_subsequent_mask(t),
+            lambda t: create_padding_mask(t, pad_id) * create_subsequent_mask(
+                t),
             name="target_mask")
         self.logits_layer = Dense(
             target_vocab_size,

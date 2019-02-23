@@ -1,9 +1,9 @@
 from absl import app, flags
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.callbacks import TensorBoard
-from tensorflow.keras.layers import Input, Dense, Softmax
-from tensorflow.keras.models import Model
+from keras.callbacks import TensorBoard
+from keras.layers import Input, Dense, Softmax
+from keras.models import Model
 
 from data.translation import datasets, load_vocab, PAD_ID
 from transformer import Transformer, label_smoothing
@@ -89,9 +89,15 @@ def run(
         test_files=["newstest2013"])
 
     train_data = train_data.map(
-        lambda s, t: ((s[1:], t[:-1]), label_smoothing(tf.one_hot(t[1:], depth=target_vocab_size), label_smoothing_epsilon, target_vocab_size)))
+        lambda s, t: ((s[1:], t[:-1]),
+                      label_smoothing(
+                          tf.one_hot(t[1:], depth=target_vocab_size),
+                          label_smoothing_epsilon, target_vocab_size)))
     test_data = test_data.map(
-        lambda s, t: ((s[1:], t[:-1]), label_smoothing(tf.one_hot(t[1:], depth=target_vocab_size), label_smoothing_epsilon, target_vocab_size)))
+        lambda s, t: ((s[1:], t[:-1]),
+                      label_smoothing(
+                          tf.one_hot(t[1:], depth=target_vocab_size),
+                          label_smoothing_epsilon, target_vocab_size)))
 
     train_data = train_data.shuffle(100).batch(batch_size).repeat()
 

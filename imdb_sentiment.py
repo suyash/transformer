@@ -6,11 +6,11 @@ from absl import app, flags
 import numpy as np
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
-from tensorflow.keras.callbacks import TensorBoard
-from tensorflow.keras.datasets import imdb
-from tensorflow.keras.layers import Add, Dense, Dropout, Flatten, Input, Lambda
-from tensorflow.keras.models import Model
-from tensorflow.keras.preprocessing.sequence import pad_sequences
+from keras.callbacks import TensorBoard
+from keras.datasets import imdb
+from keras.layers import Add, Dense, Dropout, Flatten, Input, Lambda
+from keras.models import Model
+from keras.preprocessing.sequence import pad_sequences
 
 from transformer import Encoder, Embedding, create_padding_mask, PositionalEncoding
 
