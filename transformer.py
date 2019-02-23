@@ -283,13 +283,13 @@ class PositionalEncoding(Layer):
         shape = tf.shape(inputs)
         batch_size, seq_len = shape[0], shape[1]
 
-        positions = tf.to_float(tf.range(seq_len))
+        positions = tf.cast(tf.range(seq_len), tf.float32)
         num_timescales = self.d_model // 2
         log_timescale_increment = (
             math.log(float(self.max_timescale) / float(self.min_timescale)) /
-            tf.maximum(tf.to_float(num_timescales) - 1, 1))
+            tf.maximum(tf.cast(num_timescales, tf.float32) - 1, 1))
         inv_timescales = self.min_timescale * tf.exp(
-            tf.to_float(tf.range(num_timescales)) * -log_timescale_increment)
+            tf.cast(tf.range(num_timescales), tf.float32) * -log_timescale_increment)
         scaled_time = tf.expand_dims(positions, 1) * tf.expand_dims(
             inv_timescales, 0)
 
