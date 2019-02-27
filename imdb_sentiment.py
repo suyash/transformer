@@ -6,7 +6,7 @@ from absl import app, flags
 import numpy as np
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
-from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, TensorBoard
 from tensorflow.keras.datasets import imdb
 from tensorflow.keras.layers import Add, Dense, Dropout, Flatten, Input, Lambda
 from tensorflow.keras.models import Model
@@ -102,7 +102,9 @@ def run(
                 log_dir=model_dir,
                 histogram_freq=0,
                 write_graph=True,
-                write_images=True)
+                write_images=True),
+            EarlyStopping(min_delta=0.1, patience=5, verbose=1),
+            ReduceLROnPlateau(factor=0.2, patience=5, min_lr=0.00001, verbose=1),
         ])
 
     print("Test Results:", model.evaluate(x_test, y_test))
