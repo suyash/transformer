@@ -25,6 +25,8 @@ app.flags.DEFINE_integer("d_ff", 512, "feedforward model size")
 app.flags.DEFINE_integer("num_heads", 8, "number of attention heads")
 app.flags.DEFINE_float("dropout", 0.5, "dropout")
 app.flags.DEFINE_integer("batch_size", 250, "batch size")
+app.flags.DEFINE_integer("early_stopping_patience", 5,
+                         "early stopping patience")
 app.flags.DEFINE_integer("epochs", 50, "number of training epochs")
 
 
@@ -69,6 +71,7 @@ def run(
         h,
         dropout,
         batch_size,
+        early_stopping_patience,
         epochs,
 ):
     (x_train, y_train), (x_test, y_test) = imdb.load_data(start_char=None)
@@ -103,8 +106,11 @@ def run(
                 histogram_freq=0,
                 write_graph=True,
                 write_images=True),
-            EarlyStopping(min_delta=0.1, patience=5, verbose=1),
-            ReduceLROnPlateau(factor=0.2, patience=5, min_lr=0.00001, verbose=1),
+            EarlyStopping(
+                min_delta=0.1, patience=early_stopping_patience, verbose=1),
+            # NOTE: not working with tf.train optimizers
+            # ReduceLROnPlateau(
+            #     factor=0.2, patience=5, min_lr=0.00001, verbose=1),
         ])
 
     print("Test Results:", model.evaluate(x_test, y_test))
@@ -117,7 +123,7 @@ def main(_):
     FLAGS = flags.FLAGS
     run(FLAGS.model_dir, FLAGS.seq_len, FLAGS.vocab_size, FLAGS.pad_id,
         FLAGS.N, FLAGS.d_model, FLAGS.d_ff, FLAGS.num_heads, FLAGS.dropout,
-        FLAGS.batch_size, FLAGS.epochs)
+        FLAGS.batch_size, FLAGS.early_stopping_patience, FLAGS.epochs)
 
 
 if __name__ == "__main__":
