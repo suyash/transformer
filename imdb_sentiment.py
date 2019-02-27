@@ -71,7 +71,7 @@ def run(
         batch_size,
         epochs,
 ):
-    (x_train, y_train), (x_test, y_test) = imdb.load_data()
+    (x_train, y_train), (x_test, y_test) = imdb.load_data(start_char=None)
 
     x_train = pad_sequences(
         x_train, maxlen=seq_len, padding="pre", truncating="pre", value=pad_id)
