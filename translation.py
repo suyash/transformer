@@ -22,6 +22,8 @@ app.flags.DEFINE_float("label_smoothing_epsilon", 0.1,
                        "label smoothing epsilon")
 app.flags.DEFINE_integer("batch_size", 256, "batch size")
 app.flags.DEFINE_integer("max_steps", 300_000, "number of training steps")
+app.flags.DEFINE_integer("epochs", 100,
+                         "number of epochs to divide the training steps into")
 
 
 def create_model(
@@ -77,9 +79,11 @@ def run(
         label_smoothing_epsilon,
         batch_size,
         max_steps,
+        epochs,
 ):
     (source_word2id, source_id2word), (target_word2id,
-                                       target_id2word) = load_vocab(dataset)
+                                       target_id2word) = load_vocab(
+                                           dataset, data_dir)
     source_vocab_size, target_vocab_size = len(source_id2word), len(
         target_id2word)
 
@@ -119,8 +123,8 @@ def run(
 
     model.fit(
         train_data,
-        steps_per_epoch=max_steps // 100,
-        epochs=100,
+        steps_per_epoch=max_steps // epochs,
+        epochs=epochs,
         callbacks=[
             TensorBoard(
                 log_dir=model_dir,
@@ -148,6 +152,7 @@ def main(_):
         FLAGS.label_smoothing_epsilon,
         FLAGS.batch_size,
         FLAGS.max_steps,
+        FLAGS.epochs,
     )
 
 
