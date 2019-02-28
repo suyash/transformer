@@ -75,9 +75,9 @@ config = {
 }
 
 
-def _maybe_download(dataset):
+def _maybe_download(dataset, data_dir):
     for file in config[dataset]["files"]:
-        _maybe_download_file(file, "data/%s" % dataset, config[dataset]["url"])
+        _maybe_download_file(file, data_dir, config[dataset]["url"])
 
 
 def _maybe_download_file(filename, data_dir, url_root):
@@ -101,14 +101,14 @@ def _maybe_download_file(filename, data_dir, url_root):
         print('Successfully downloaded', filename, statinfo.st_size, 'bytes.')
 
 
-def load_vocab(dataset="wmt14"):
-    _maybe_download(dataset)
+def load_vocab(dataset="wmt14", data_dir="./data/wmt14"):
+    _maybe_download(dataset, data_dir)
     source_word2id, source_id2word = _load_vocab_file(
-        "data/%s/%s.%s" % (dataset, config[dataset]["vocab"],
-                           config[dataset]["source_lang"]))
+        "%s/%s.%s" % (data_dir, config[dataset]["vocab"],
+                      config[dataset]["source_lang"]))
     target_word2id, target_id2word = _load_vocab_file(
-        "data/%s/%s.%s" % (dataset, config[dataset]["vocab"],
-                           config[dataset]["source_lang"]))
+        "%s/%s.%s" % (data_dir, config[dataset]["vocab"],
+                      config[dataset]["source_lang"]))
     return ((source_word2id, source_id2word), (target_word2id, target_id2word))
 
 
@@ -124,8 +124,8 @@ def _load_vocab_file(filepath):
 def _file_to_dataset(filepath, word2id, seq_len):
     data = tf.data.TextLineDataset(filepath)
     data = data.map(lambda line: tf.strings.strip(line))
-    data = data.map(
-        lambda line: tf.py_func(lambda s: s.lower(), [line], tf.string))
+    data = data.map(lambda line: tf.py_func(lambda s: s.lower(), [line], tf.
+                                            string))
     data = data.map(lambda line: tf.string_split([line], ' ', skip_empty=True))
 
     # cannot do lookup tables here as keras doesn't automatically run `tables_initializer`
@@ -133,17 +133,24 @@ def _file_to_dataset(filepath, word2id, seq_len):
     # table = tf.contrib.lookup.index_table_from_tensor(mapping=target_id2word, default_value=UNKNOWN_ID)
     # data = data.map(lambda line: tf.SparseTensor(line.indices, table.lookup(line.values), line.dense_shape))
 
-    map_fn = lambda w: tf.py_func(lambda x: np.int32(word2id.get(x.decode("utf-8"), UNKNOWN_ID)), w, tf.int32)
-    data = data.map(
-        lambda line: tf.SparseTensor(line.indices, tf.map_fn(map_fn, [line.values], tf.int32), line.dense_shape))
-    data = data.map(
-        lambda line: tf.sparse.to_dense(line, default_value=UNKNOWN_ID)[0])
-    data = data.map(
-        lambda line: tf.concat([[START_ID], line, [END_ID]], axis=0))
+    map_fn = lambda w: tf.py_func(
+        lambda x: np.int32(word2id.get(x.decode("utf-8"), UNKNOWN_ID)), w, tf.
+        int32)
+    data = data.map(lambda line: tf.SparseTensor(
+        line.indices, tf.map_fn(map_fn, [line.values], tf.int32), line.
+        dense_shape))
+    data = data.map(lambda line: tf.sparse.to_dense(
+        line, default_value=UNKNOWN_ID)[0])
+    data = data.map(lambda line: tf.concat([[START_ID], line, [END_ID]],
+                                           axis=0))
 
     # NOTE: need the values to be padded beforehand for the filter use later, hence no `padded_batch`
-    data = data.map(
-        lambda line: tf.concat([line, tf.ones((tf.maximum(0, seq_len - tf.shape(line)[0])), dtype=tf.int32) * PAD_ID], axis=0))
+    data = data.map(lambda line: tf.concat([
+        line,
+        tf.ones((tf.maximum(0, seq_len - tf.shape(line)[0])), dtype=tf.int32) *
+        PAD_ID
+    ],
+                                           axis=0))
 
     return data
 
@@ -157,14 +164,18 @@ def _dataset(basefilepath, source_lang, target_lang, source_word2id,
     target_dataset = _file_to_dataset(target_file, target_word2id, seq_len)
 
     dataset = tf.data.Dataset.zip((source_dataset, target_dataset))
-    dataset = dataset.filter(
-        lambda s, l: tf.logical_and(tf.equal(tf.size(s), seq_len), tf.equal(tf.size(l), seq_len)))
+    dataset = dataset.filter(lambda s, l: tf.logical_and(
+        tf.equal(tf.size(s), seq_len), tf.equal(tf.size(l), seq_len)))
     return dataset
 
 
-def datasets(dataset, source_word2id, target_word2id, seq_len,
+def datasets(dataset,
+             data_dir,
+             source_word2id,
+             target_word2id,
+             seq_len,
              test_files=None):
-    train_data = _dataset("data/%s/%s" % (dataset, config[dataset]["train"]),
+    train_data = _dataset("%s/%s" % (data_dir, config[dataset]["train"]),
                           config[dataset]["source_lang"],
                           config[dataset]["target_lang"], source_word2id,
                           target_word2id, seq_len)
@@ -174,8 +185,9 @@ def datasets(dataset, source_word2id, target_word2id, seq_len,
 
     test_datasets = list(
         map(
-            lambda f: _dataset("data/%s/%s" % (dataset, f), config[dataset]["source_lang"], config[dataset]["target_lang"], source_word2id, target_word2id, seq_len),
-            test_files))
+            lambda f: _dataset("%s/%s" % (data_dir, f), config[dataset][
+                "source_lang"], config[dataset]["target_lang"], source_word2id,
+                               target_word2id, seq_len), test_files))
 
     test_data = test_datasets[0]
     for i in range(1, len(test_datasets)):

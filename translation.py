@@ -8,9 +8,10 @@ from tensorflow.keras.models import Model
 from data.translation import datasets, load_vocab, PAD_ID
 from transformer import Transformer, label_smoothing
 
-app.flags.DEFINE_string("model_dir", "models/sentiment",
+app.flags.DEFINE_string("model_dir", "models/translation",
                         "directory to save checkpoints and exported models")
 app.flags.DEFINE_string("dataset", "wmt14", "translation dataset to use")
+app.flags.DEFINE_string("data_dir", "./data/wmt14", "location of the data")
 app.flags.DEFINE_integer("seq_len", 10, "sequence length")
 app.flags.DEFINE_integer("N", 6, "number of layers in the encoder and decoder")
 app.flags.DEFINE_integer("d_model", 512, "encoder model size")
@@ -66,6 +67,7 @@ def create_model(
 def run(
         model_dir,
         dataset,
+        data_dir,
         seq_len,
         N,
         d_model,
@@ -83,15 +85,22 @@ def run(
 
     train_data, test_data = datasets(
         dataset,
+        data_dir,
         source_word2id,
         target_word2id,
         seq_len,
         test_files=["newstest2013"])
 
     train_data = train_data.map(
-        lambda s, t: ((s[1:], t[:-1]), label_smoothing(tf.one_hot(t[1:], depth=target_vocab_size), label_smoothing_epsilon, target_vocab_size)))
+        lambda s, t: ((s[1:], t[:-1]),
+                      label_smoothing(
+                          tf.one_hot(t[1:], depth=target_vocab_size),
+                          label_smoothing_epsilon, target_vocab_size)))
     test_data = test_data.map(
-        lambda s, t: ((s[1:], t[:-1]), label_smoothing(tf.one_hot(t[1:], depth=target_vocab_size), label_smoothing_epsilon, target_vocab_size)))
+        lambda s, t: ((s[1:], t[:-1]),
+                      label_smoothing(
+                          tf.one_hot(t[1:], depth=target_vocab_size),
+                          label_smoothing_epsilon, target_vocab_size)))
 
     train_data = train_data.shuffle(100).batch(batch_size).repeat()
 
@@ -129,6 +138,7 @@ def main(_):
     run(
         FLAGS.model_dir,
         FLAGS.dataset,
+        FLAGS.data_dir,
         FLAGS.seq_len,
         FLAGS.N,
         FLAGS.d_model,
