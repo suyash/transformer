@@ -23,10 +23,7 @@ app.flags.DEFINE_integer("d_ff", 512, "feedforward model size")
 app.flags.DEFINE_integer("num_heads", 8, "number of attention heads")
 app.flags.DEFINE_float("dropout", 0.5, "dropout")
 app.flags.DEFINE_integer("batch_size", 250, "batch size")
-app.flags.DEFINE_integer("early_stopping_patience", 5,
-                         "early stopping patience")
-app.flags.DEFINE_integer("max_steps", 10_000, "number of training steps")
-app.flags.DEFINE_integer("epochs", 50, "number of training epochs to divide steps into")
+app.flags.DEFINE_integer("max_steps", 1000, "maximum number of training steps")
 
 
 def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
@@ -70,9 +67,7 @@ def run(
         h,
         dropout,
         batch_size,
-        early_stopping_patience,
         max_steps,
-        epochs,
 ):
     model = create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h,
                          dropout)
@@ -83,34 +78,41 @@ def run(
     train_data = train_input_fn(tok, batch_size)
     test_data = test_input_fn(tok, batch_size)
 
-    model.fit(
-        train_data,
-        epochs=epochs,
-        steps_per_epoch=max_steps // epochs,
-        validation_data=test_data,
-        validation_steps=25000 // batch_size,
-        callbacks=[
-            TensorBoard(
-                log_dir=model_dir,
-                histogram_freq=0,
-                write_graph=True,
-                write_images=True),
-            EarlyStopping(
-                min_delta=0.1, patience=early_stopping_patience, verbose=1),
-            # NOTE: not working with tf.train optimizers
-            # ReduceLROnPlateau(
-            #     factor=0.2, patience=5, min_lr=0.00001, verbose=1),
+    def train_input_fn():
+        train_data = tf.data.Dataset.from_tensor_slices((x_train, y_train))
+        return train_data.batch(batch_size).repeat()
+
+    def eval_input_fn():
+        return tf.data.Dataset.from_tensor_slices((x_eval,
+                                                   y_eval)).batch(batch_size)
+
+    config = tf.estimator.RunConfig(model_dir=model_dir)
+    estimator = tf.keras.estimator.model_to_estimator(model, config=config)
+
+    train_spec = tf.estimator.TrainSpec(train_input_fn, max_steps=max_steps)
+
+    serving_input_receiver_fn = tf.estimator.export.build_raw_serving_input_receiver_fn(
+        {"input_text": model.input})
+
+    eval_spec = tf.estimator.EvalSpec(
+        eval_input_fn,
+        exporters=[
+            tf.estimator.LatestExporter("model", serving_input_receiver_fn)
         ])
 
-    model.save_weights("%s/weights/model_weights" % model_dir)
-    # tf.contrib.saved_model.save_keras_model(model, "%s/saved_model" % model_dir, serving_only=True)
+    tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+
+    def test_input_fn():
+        return tf.data.Dataset.from_tensor_slices((x_test, y_test)).batch(1)
+
+    print(estimator.evaluate(test_input_fn))
 
 
 def main(_):
     FLAGS = flags.FLAGS
     run(FLAGS.model_dir, FLAGS.seq_len, FLAGS.vocab_size, FLAGS.pad_id,
         FLAGS.N, FLAGS.d_model, FLAGS.d_ff, FLAGS.num_heads, FLAGS.dropout,
-        FLAGS.batch_size, FLAGS.early_stopping_patience, FLAGS.max_steps, FLAGS.epochs)
+        FLAGS.batch_size, FLAGS.early_stopping_patience, FLAGS.max_steps)
 
 
 if __name__ == "__main__":
