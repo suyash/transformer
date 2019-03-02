@@ -27,7 +27,7 @@ app.flags.DEFINE_integer("max_steps", 1000, "maximum number of training steps")
 
 
 def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
-    inp = Input((seq_len, ))
+    inp = Input((seq_len, ), name="input_text")
     embedding = Embedding(vocab_size, d_model, pad_id)(inp)
     encoding = PositionalEncoding(d_model)(inp)
     net = Add()([embedding, encoding])
