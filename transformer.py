@@ -70,9 +70,8 @@ class Attention(Layer):
         # TODO: figure out why `tf.cond` isn't used for implementing the `Dropout` layer.
         # NOTE: tf.cond seems to work without any visible difference, see the 2.0 branch.
         out = tf.contrib.framework.smart_cond(
-            Backend.learning_phase(),
-            lambda: Backend.dropout(p_attn, self.dropout),
-            lambda: tf.identity(p_attn))
+            Backend.learning_phase(), lambda: Backend.dropout(
+                p_attn, self.dropout), lambda: tf.identity(p_attn))
 
         out = tf.matmul(p_attn, V)  # [h * batch, q_size, d_model]
         return [out, p_attn]
@@ -80,68 +79,98 @@ class Attention(Layer):
     def compute_output_shape(self, input_shape):
         return input_shape[0]
 
+    def get_config(self):
+        return {
+            "d_k": self.d_k,
+            "dropout": self.dropout,
+            "use_mask": self.use_mask,
+        }
 
-class MultiHeadAttention(Model):
+
+class MultiHeadAttention:
     """
     Multiheaded Attention by splitting across `h` attention heads
     """
+
+    name_cache = {
+        "query": 0,
+        "key": 0,
+        "value": 0,
+        "split_attention_heads": 0,
+        "join_attention_heads": 0,
+        "expand_mask": 0,
+        "final_output": 0,
+    }
 
     def __init__(self,
                  d_model,
                  h,
                  use_mask,
                  dropout,
-                 initializer="glorot_uniform",
-                 **kwargs):
+                 initializer="glorot_uniform"):
         """
         d_model: int
         h: int
         use_mask: bool
         dropout: float[0, 1]
         """
-        super(MultiHeadAttention, self).__init__(**kwargs)
-
         self.use_mask = use_mask
 
         self.lq = Dense(
             d_model,
             activation=None,
-            name="query",
+            name="query_%d" % MultiHeadAttention.name_cache["query"],
             kernel_initializer=initializer,
             bias_initializer=initializer)
+        MultiHeadAttention.name_cache["query"] += 1
+
         self.lk = Dense(
             d_model,
             activation=None,
-            name="key",
+            name="key_%d" % MultiHeadAttention.name_cache["key"],
             kernel_initializer=initializer,
             bias_initializer=initializer)
+        MultiHeadAttention.name_cache["key"] += 1
+
         self.lv = Dense(
             d_model,
             activation=None,
-            name="value",
+            name="value_%d" % MultiHeadAttention.name_cache["value"],
             kernel_initializer=initializer,
             bias_initializer=initializer)
+        MultiHeadAttention.name_cache["value"] += 1
+
         self.lf = Dense(
             d_model,
             activation=None,
-            name="final_output",
+            name="final_output_%d" %
+            MultiHeadAttention.name_cache["final_output"],
             kernel_initializer=initializer,
             bias_initializer=initializer)
+        MultiHeadAttention.name_cache["final_output"] += 1
 
         self.splitter = Lambda(
             lambda t: tf.concat(tf.split(t, h, axis=2), axis=0),
-            name="split_attention_heads")
+            name="split_attention_heads_%d" %
+            MultiHeadAttention.name_cache["split_attention_heads"])
+        MultiHeadAttention.name_cache["split_attention_heads"] += 1
+
         self.joiner = Lambda(
             lambda t: tf.concat(tf.split(t, h, axis=0), axis=2),
-            name="join_attention_heads")
+            name="join_attention_heads_%d" %
+            MultiHeadAttention.name_cache["join_attention_heads"])
+        MultiHeadAttention.name_cache["join_attention_heads"] += 1
 
         if use_mask:
             self.mask_expander = Lambda(
-                lambda t: tf.tile(t, [h, 1, 1]), name="expand_mask")
+                lambda t: tf.tile(t, [h, 1, 1]),
+                name="expand_mask_%d" %
+                MultiHeadAttention.name_cache["expand_mask"])
+        MultiHeadAttention.name_cache["expand_mask"] += 1
 
         self.attention = Attention(d_model // h, use_mask, dropout)
 
-    def call(self, inputs):
+    def __call__(self, inputs):
         """
         inputs:
             query: [batch, q_size, d_model]
@@ -200,6 +229,11 @@ class LayerNormalization(Layer):
     def compute_output_shape(self, input_shape):
         return input_shape
 
+    def get_config(self):
+        return {
+            "eps": self.eps,
+        }
+
 
 class Embedding(Layer):
     """
@@ -219,13 +253,13 @@ class Embedding(Layer):
                  embeddings_regularizer=None,
                  embeddings_constraint=None,
                  **kwargs):
-        super(Embedding, self).__init__(**kwargs)
         self.pad_id = pad_id
         self.vocab_size = vocab_size
         self.embedding_size = embedding_size
         self.embeddings_initializer = embeddings_initializer
         self.embeddings_regularizer = embeddings_regularizer
         self.embeddings_constraint = embeddings_constraint
+        super(Embedding, self).__init__(**kwargs)
 
     def build(self, input_shape):
         self.pad_embeddings = self.add_weight(
@@ -267,17 +301,31 @@ class Embedding(Layer):
         out = tf.nn.embedding_lookup(self.embeddings, inputs)
         return out * np.sqrt(self.embedding_size)
 
+    def get_config(self):
+        return {
+            "vocab_size": self.vocab_size,
+            "embedding_size": self.embedding_size,
+            "pad_id": self.pad_id,
+            "embeddings_initializer": self.embeddings_initializer,
+            "embeddings_regularizer": self.embeddings_regularizer,
+            "embeddings_constraint": self.embeddings_constraint,
+        }
+
 
 class PositionalEncoding(Layer):
     """
     https://github.com/tensorflow/tensor2tensor/blob/164d26baf74aa0ac5ab585d02f84b224ab86c129/tensor2tensor/layers/common_attention.py#L403-L449
     """
 
-    def __init__(self, d_model, min_timescale=1.0, max_timescale=1.0e4):
-        super(PositionalEncoding, self).__init__()
+    def __init__(self,
+                 d_model,
+                 min_timescale=1.0,
+                 max_timescale=1.0e4,
+                 **kwargs):
         self.d_model = d_model
         self.min_timescale = min_timescale
         self.max_timescale = max_timescale
+        super(PositionalEncoding, self).__init__(**kwargs)
 
     def call(self, inputs):
         shape = tf.shape(inputs)
@@ -289,7 +337,8 @@ class PositionalEncoding(Layer):
             math.log(float(self.max_timescale) / float(self.min_timescale)) /
             tf.maximum(tf.cast(num_timescales, tf.float32) - 1, 1))
         inv_timescales = self.min_timescale * tf.exp(
-            tf.cast(tf.range(num_timescales), tf.float32) * -log_timescale_increment)
+            tf.cast(tf.range(num_timescales), tf.float32) *
+            -log_timescale_increment)
         scaled_time = tf.expand_dims(positions, 1) * tf.expand_dims(
             inv_timescales, 0)
 
@@ -303,26 +352,27 @@ class PositionalEncoding(Layer):
 
         return tf.tile(tf.expand_dims(signal, 0), [batch_size, 1, 1])
 
+    def get_config(self):
+        return {
+            "d_model": self.d_model,
+            "min_timescale": self.min_timescale,
+            "max_timescale": self.max_timescale,
+        }
 
-class EncoderLayer(Model):
+
+class EncoderLayer:
     """
     self attention + FF
     """
 
-    def __init__(self,
-                 d_model,
-                 d_ff,
-                 h,
-                 dropout,
-                 initializer="glorot_uniform",
-                 **kwargs):
+    def __init__(self, d_model, d_ff, h, dropout,
+                 initializer="glorot_uniform"):
         """
         d_model: int
         d_ff: int
         h: int
         dropout: float[0, 1]
         """
-        super(EncoderLayer, self).__init__(**kwargs)
         self.add_1 = Add()
         self.norm_1 = LayerNormalization()
         self.dropout_1 = Dropout(dropout)
@@ -347,7 +397,7 @@ class EncoderLayer(Model):
         self.norm_2 = LayerNormalization()
         self.dropout_2 = Dropout(dropout)
 
-    def call(self, inputs):
+    def __call__(self, inputs):
         """
         inp: [batch, seq_len, d_model]
         mask: [batch, seq_len, seq_len]
@@ -380,7 +430,7 @@ class EncoderLayer(Model):
         return self.conv_2(out)  # [batch, seq_len, d_model]
 
 
-class Encoder(Model):
+class Encoder:
     """
     N `EncoderLayer`s in sequence
     """
@@ -391,8 +441,7 @@ class Encoder(Model):
                  d_ff=2048,
                  h=8,
                  dropout=0.1,
-                 initializer="glorot_uniform",
-                 **kwargs):
+                 initializer="glorot_uniform"):
         """
         N: int
         d_model: int
@@ -400,14 +449,13 @@ class Encoder(Model):
         h: int
         dropout: float[0, 1]
         """
-        super(Encoder, self).__init__(**kwargs)
         self.encoder_layers = [
             EncoderLayer(d_model, d_ff, h, dropout, initializer=initializer)
             for _ in range(N)
         ]
         self.norm = LayerNormalization()
 
-    def call(self, inputs):
+    def __call__(self, inputs):
         """
         inp: [batch, seq_len, d_model]
         mask: [batch, seq_len, seq_len]
@@ -421,18 +469,13 @@ class Encoder(Model):
         return self.norm(out)
 
 
-class DecoderLayer(Model):
+class DecoderLayer:
     """
     self attention + src attention + FF
     """
 
-    def __init__(self,
-                 d_model,
-                 d_ff,
-                 h,
-                 dropout,
-                 initializer="glorot_uniform",
-                 **kwargs):
+    def __init__(self, d_model, d_ff, h, dropout,
+                 initializer="glorot_uniform"):
         """
         d_model: int
         d_ff: int
@@ -440,7 +483,6 @@ class DecoderLayer(Model):
         dropout: float[0, 1]
         initializer: string/keras.initializers object
         """
-        super(DecoderLayer, self).__init__(**kwargs)
         self.add_1 = Add()
         self.norm_1 = LayerNormalization()
         self.dropout_1 = Dropout(dropout)
@@ -472,7 +514,7 @@ class DecoderLayer(Model):
         self.norm_3 = LayerNormalization()
         self.dropout_3 = Dropout(dropout)
 
-    def call(self, inputs):
+    def __call__(self, inputs):
         """
         inp: [batch, seq_len, d_model]
         memory: [batch, seq_len, d_model]
@@ -515,7 +557,7 @@ class DecoderLayer(Model):
         return self.conv_2(out)  # [batch, seq_len, d_model]
 
 
-class Decoder(Model):
+class Decoder:
     """
     N `DecoderLayer`s in sequence
     """
@@ -526,8 +568,7 @@ class Decoder(Model):
                  d_ff=2048,
                  h=8,
                  dropout=0.1,
-                 initializer="glorot_uniform",
-                 **kwargs):
+                 initializer="glorot_uniform"):
         """
         N: int
         d_model: int
@@ -536,14 +577,13 @@ class Decoder(Model):
         dropout: float[0, 1]
         initializer: string/keras.initializers object
         """
-        super(Decoder, self).__init__(**kwargs)
         self.decoder_layers = [
             DecoderLayer(d_model, d_ff, h, dropout, initializer=initializer)
             for _ in range(N)
         ]
         self.norm = LayerNormalization()
 
-    def call(self, inputs):
+    def __call__(self, inputs):
         """
         inp: [batch, seq_len, d_model]
         enc_out: encoder output [batch, seq_len, d_model]
@@ -559,7 +599,7 @@ class Decoder(Model):
         return self.norm(out)
 
 
-class Transformer(Model):
+class Transformer:
     """
     input embedding + encoder -> target_embedding + decoder -> logits
 
@@ -578,8 +618,7 @@ class Transformer(Model):
                  d_ff=2048,
                  h=8,
                  dropout=0.1,
-                 initializer="glorot_uniform",
-                 **kwargs):
+                 initializer="glorot_uniform"):
         """
         input_vocab_size: int
         target_vocab_size: int
@@ -592,8 +631,6 @@ class Transformer(Model):
         dropout: float[0, 1]
         initializer: string/keras.initializers object
         """
-        super(Transformer, self).__init__(**kwargs)
-
         self.target_vocab_size = target_vocab_size
         self.d_model = d_model
         self.dropout = dropout
@@ -605,7 +642,8 @@ class Transformer(Model):
         self.input_mask_layer = Lambda(
             lambda t: create_padding_mask(t, pad_id), name="input_mask")
         self.target_mask_layer = Lambda(
-            lambda t: create_padding_mask(t, pad_id) * create_subsequent_mask(t),
+            lambda t: create_padding_mask(t, pad_id) * create_subsequent_mask(
+                t),
             name="target_mask")
         self.logits_layer = Dense(
             target_vocab_size,
@@ -626,7 +664,7 @@ class Transformer(Model):
 
         self.positional_encode = PositionalEncoding(d_model)
 
-    def call(self, inputs):
+    def __call__(self, inputs):
         """
         enc_inp: [batch_size, seq_len]
         dec_inp: [batch_size, seq_len]
@@ -647,6 +685,7 @@ class Transformer(Model):
         dec_out = self.decoder([dec_inp, enc_out, inp_mask, tar_mask])
 
         logits = self.logits_layer(dec_out)
+
         return logits
 
 
