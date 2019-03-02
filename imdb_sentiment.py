@@ -112,7 +112,7 @@ def main(_):
     FLAGS = flags.FLAGS
     run(FLAGS.model_dir, FLAGS.seq_len, FLAGS.vocab_size, FLAGS.pad_id,
         FLAGS.N, FLAGS.d_model, FLAGS.d_ff, FLAGS.num_heads, FLAGS.dropout,
-        FLAGS.batch_size, FLAGS.early_stopping_patience, FLAGS.max_steps)
+        FLAGS.batch_size, FLAGS.max_steps)
 
 
 if __name__ == "__main__":
