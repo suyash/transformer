@@ -49,7 +49,7 @@ from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.layers import Input, Dense, Softmax
 from tensorflow.keras.models import Model
 
-from data.translation import datasets, load_vocab, PAD_ID
+from data.translation import train_input_fn, test_input_fn, load_vocab, PAD_ID
 from transformer import Transformer, label_smoothing
 
 app.flags.DEFINE_string("model_dir", "models/translation",
@@ -80,8 +80,8 @@ def create_model(
         h,
         dropout,
 ):
-    source_input = Input((seq_len - 1, ))
-    target_input = Input((seq_len - 1, ))
+    source_input = Input((seq_len - 1, ), name="input_text")
+    target_input = Input((seq_len - 1, ), name="target_text")
     net = Transformer(
         input_vocab_size=source_vocab_size,
         target_vocab_size=target_vocab_size,
@@ -123,34 +123,12 @@ def run(
         label_smoothing_epsilon,
         batch_size,
         max_steps,
-        epochs,
 ):
     (source_word2id, source_id2word), (target_word2id,
                                        target_id2word) = load_vocab(
                                            dataset, data_dir)
     source_vocab_size, target_vocab_size = len(source_id2word), len(
         target_id2word)
-
-    train_data, test_data = datasets(
-        dataset,
-        data_dir,
-        source_word2id,
-        target_word2id,
-        seq_len,
-        test_files=["newstest2013"])
-
-    train_data = train_data.map(
-        lambda s, t: ((s[1:], t[:-1]),
-                      label_smoothing(
-                          tf.one_hot(t[1:], depth=target_vocab_size),
-                          label_smoothing_epsilon, target_vocab_size)))
-    test_data = test_data.map(
-        lambda s, t: ((s[1:], t[:-1]),
-                      label_smoothing(
-                          tf.one_hot(t[1:], depth=target_vocab_size),
-                          label_smoothing_epsilon, target_vocab_size)))
-
-    train_data = train_data.shuffle(100).batch(batch_size).repeat()
 
     model = create_model(
         source_vocab_size,
@@ -165,20 +143,60 @@ def run(
 
     model.summary()
 
-    model.fit(
-        train_data,
-        steps_per_epoch=max_steps // epochs,
-        epochs=epochs,
-        callbacks=[
-            TensorBoard(
-                log_dir=model_dir,
-                histogram_freq=0,
-                write_graph=True,
-                write_images=True)
+    config = tf.estimator.RunConfig(model_dir=model_dir)
+    estimator = tf.keras.estimator.model_to_estimator(model, config=config)
+
+    train_input_fn_ = functools.partial(
+        train_input_fn,
+        dataset=dataset,
+        data_dir=data_dir,
+        source_word2id=source_word2id,
+        target_word2id=target_word2id,
+        seq_len=seq_len,
+        target_vocab_size=target_vocab_size,
+        label_smoothing_epsilon=label_smoothing_epsilon,
+        batch_size=batch_size)
+
+    train_spec = tf.estimator.TrainSpec(train_input_fn_, max_steps=max_steps)
+
+    eval_input_fn_ = functools.partial(
+        test_input_fn,
+        dataset=dataset,
+        data_dir=data_dir,
+        source_word2id=source_word2id,
+        target_word2id=target_word2id,
+        seq_len=seq_len,
+        target_vocab_size=target_vocab_size,
+        label_smoothing_epsilon=label_smoothing_epsilon,
+        batch_size=batch_size,
+        test_files=["newstest2013"])
+
+    serving_input_receiver_fn = tf.estimator.export.build_raw_serving_input_receiver_fn(
+        {
+            "input_text": model.inputs[0],
+            "target_text": model.inputs[1]
+        })
+
+    eval_spec = tf.estimator.EvalSpec(
+        eval_input_fn_,
+        exporters=[
+            tf.estimator.LatestExporter("model", serving_input_receiver_fn)
         ])
 
-    model.save_weights("%s/weights/model_weights" % model_dir)
-    # tf.contrib.saved_model.save_keras_model(model, "%s/saved_model" % model_dir, serving_only=True)
+    tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+
+    test_input_fn_ = functools.partial(
+        test_input_fn,
+        dataset=dataset,
+        data_dir=data_dir,
+        source_word2id=source_word2id,
+        target_word2id=target_word2id,
+        seq_len=seq_len,
+        target_vocab_size=target_vocab_size,
+        label_smoothing_epsilon=label_smoothing_epsilon,
+        batch_size=batch_size)
+
+    print("Test Results:", estimator.evaluate(test_input_fn_))
 
 
 def main(_):
@@ -196,7 +214,6 @@ def main(_):
         FLAGS.label_smoothing_epsilon,
         FLAGS.batch_size,
         FLAGS.max_steps,
-        FLAGS.epochs,
     )
 
 
