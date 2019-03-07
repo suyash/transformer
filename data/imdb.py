@@ -2,6 +2,9 @@
 tokenizing and loading imdb movie reviews dataset.
 """
 
+import json
+import os
+
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
@@ -27,6 +30,7 @@ class Tokenizer:
                  filter='\'!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n'):
         self.num_words = num_words
         self.maxlen = maxlen
+        self.data_dir = data_dir
         self.filter = {ord(c): None for c in filter}
 
         self.frequencies = {}
@@ -36,6 +40,7 @@ class Tokenizer:
         for t in g:
             for word in t.split(b" "):
                 word = word.decode("utf-8")
+                word = word.lower()
                 word = word.translate(self.filter)
                 if len(word) == 0:
                     continue
@@ -52,12 +57,24 @@ class Tokenizer:
         for i, (_, k) in enumerate(inverted):
             self.index[k] = i + 2
 
+        if self.data_dir:
+            d = os.path.join(self.data_dir, "data")
+
+            try:
+                os.makedirs(d)
+            except:
+                pass
+
+            with open(os.path.join(d, "word_index.json"), "w") as f:
+                json.dump(self.index, f)
+
     def transform(self, g):
         for t in g:
             cans = []
 
             for word in t.split(b" "):
                 word = word.decode("utf-8")
+                word = word.lower()
                 word = word.translate(self.filter)
                 if len(word) == 0:
                     continue
@@ -74,9 +91,10 @@ class Tokenizer:
 
             yield cans
 
-def datasets(num_words, maxlen):
+
+def datasets(num_words, maxlen, data_dir=None):
     train_data, test_data = tfds.load("imdb_reviews", split=["train", "test"])
-    tok = Tokenizer(num_words, maxlen)
+    tok = Tokenizer(num_words, maxlen, data_dir=data_dir)
 
     tok.fit(map(lambda x: x["text"], tfds.as_numpy(train_data)))
 
