@@ -1,6 +1,13 @@
 """
 translation.py with modifications to run on a horovod mpi cluster.
 
+Could not get regular parameter server estimator approach to train on Azure, but this works.
+
+This takes ~10 hours to train on a cluster with 4 machines with 1 K80 GPU,
+as opposed to ~6.5 hours on a single machine with 4 K80 GPUs, for 10000 steps.
+
+In general, implementations train for 100_000 to 300_000 steps.
+
 @see: https://github.com/horovod/horovod/blob/master/examples/tensorflow_mnist_estimator.py
 """
 import functools
