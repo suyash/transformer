@@ -91,6 +91,10 @@ class Tokenizer:
 
             yield cans
 
+    def load_index(self, filepath):
+        with open(filepath, "r") as f:
+            self.index = json.load(f)
+
 
 def datasets(num_words, maxlen, data_dir=None):
     train_data, test_data = tfds.load("imdb_reviews", split=["train", "test"])
