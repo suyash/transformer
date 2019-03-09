@@ -4,14 +4,12 @@ imdb movie review sentiment prediction using the encoder
 
 from absl import app, flags
 import numpy as np
-from sklearn.model_selection import train_test_split
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, TensorBoard
-from tensorflow.keras.datasets import imdb
 from tensorflow.keras.layers import Add, Dense, Dropout, Flatten, Input, Lambda
 from tensorflow.keras.models import Model
-from tensorflow.keras.preprocessing.sequence import pad_sequences
 
+from data.imdb import tokenizer, train_input_fn, test_input_fn
 from transformer import Encoder, Embedding, create_padding_mask, PositionalEncoding
 
 app.flags.DEFINE_string("model_dir", "models/sentiment",
@@ -27,7 +25,8 @@ app.flags.DEFINE_float("dropout", 0.5, "dropout")
 app.flags.DEFINE_integer("batch_size", 250, "batch size")
 app.flags.DEFINE_integer("early_stopping_patience", 5,
                          "early stopping patience")
-app.flags.DEFINE_integer("epochs", 50, "number of training epochs")
+app.flags.DEFINE_integer("max_steps", 10_000, "number of training steps")
+app.flags.DEFINE_integer("epochs", 50, "number of training epochs to divide steps into")
 
 
 def create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h, dropout):
@@ -72,34 +71,24 @@ def run(
         dropout,
         batch_size,
         early_stopping_patience,
+        max_steps,
         epochs,
 ):
-    (x_train, y_train), (x_test, y_test) = imdb.load_data(start_char=None)
-
-    x_train = pad_sequences(
-        x_train, maxlen=seq_len, padding="pre", truncating="pre", value=pad_id)
-    x_test = pad_sequences(
-        x_test, maxlen=seq_len, padding="pre", truncating="pre", value=pad_id)
-
-    y_train = np.eye(2)[y_train.astype(np.int32)]
-    y_test = np.eye(2)[y_test.astype(np.int32)]
-
-    x_train[x_train >= vocab_size] = pad_id
-    x_test[x_test >= vocab_size] = pad_id
-
     model = create_model(seq_len, vocab_size, pad_id, N, d_model, d_ff, h,
                          dropout)
     model.summary()
 
-    x_train, x_eval, y_train, y_eval = train_test_split(
-        x_train, y_train, test_size=0.25, random_state=1)
+    tok = tokenizer(vocab_size, seq_len, model_dir)
+
+    train_data = train_input_fn(tok, batch_size)
+    test_data = test_input_fn(tok, batch_size)
 
     model.fit(
-        x_train,
-        y_train,
-        batch_size=batch_size,
+        train_data,
         epochs=epochs,
-        validation_data=(x_eval, y_eval),
+        steps_per_epoch=max_steps // epochs,
+        validation_data=test_data,
+        validation_steps=25000 // batch_size,
         callbacks=[
             TensorBoard(
                 log_dir=model_dir,
@@ -113,8 +102,6 @@ def run(
             #     factor=0.2, patience=5, min_lr=0.00001, verbose=1),
         ])
 
-    print("Test Results:", model.evaluate(x_test, y_test))
-
     model.save_weights("%s/weights/model_weights" % model_dir)
     # tf.contrib.saved_model.save_keras_model(model, "%s/saved_model" % model_dir, serving_only=True)
 
@@ -123,7 +110,7 @@ def main(_):
     FLAGS = flags.FLAGS
     run(FLAGS.model_dir, FLAGS.seq_len, FLAGS.vocab_size, FLAGS.pad_id,
         FLAGS.N, FLAGS.d_model, FLAGS.d_ff, FLAGS.num_heads, FLAGS.dropout,
-        FLAGS.batch_size, FLAGS.early_stopping_patience, FLAGS.epochs)
+        FLAGS.batch_size, FLAGS.early_stopping_patience, FLAGS.max_steps, FLAGS.epochs)
 
 
 if __name__ == "__main__":
