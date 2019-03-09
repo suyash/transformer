@@ -89,9 +89,19 @@ def run(
     config = tf.estimator.RunConfig(model_dir=model_dir)
     estimator = tf.keras.estimator.model_to_estimator(model, config=config)
 
-    log_hook = tf.train.LoggingTensorHook({ "train_accuracy": "metrics/acc/Mean" }, every_n_iter=100)
+    log_hook = tf.train.LoggingTensorHook(
+        {"train_accuracy": "metrics/acc/Mean"}, every_n_iter=100)
 
-    train_spec = tf.estimator.TrainSpec(train_input_fn_, max_steps=max_steps, hooks=[ log_hook ])
+    early_stopping_hook = tf.contrib.estimator.stop_if_no_decrease_hook(
+        estimator,
+        metric_name="loss",
+        max_steps_without_decrease=500,
+        min_steps=100)
+
+    train_spec = tf.estimator.TrainSpec(
+        train_input_fn_,
+        max_steps=max_steps,
+        hooks=[log_hook, early_stopping_hook])
 
     serving_input_receiver_fn = tf.estimator.export.build_raw_serving_input_receiver_fn(
         {"input_text": model.input})
