@@ -96,7 +96,7 @@ def run(
         estimator,
         metric_name="loss",
         max_steps_without_decrease=500,
-        min_steps=100)
+        min_steps=5000)
 
     train_spec = tf.estimator.TrainSpec(
         train_input_fn_,
