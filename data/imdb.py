@@ -5,6 +5,7 @@ tokenizing and loading imdb movie reviews dataset.
 import json
 import os
 
+import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
@@ -96,26 +97,32 @@ class Tokenizer:
             self.index = json.load(f)
 
 
-def datasets(num_words, maxlen, data_dir=None):
-    train_data, test_data = tfds.load("imdb_reviews", split=["train", "test"])
+def tokenizer(num_words, maxlen, data_dir=None):
+    train_data = tfds.load("imdb_reviews", split="train")
     tok = Tokenizer(num_words, maxlen, data_dir=data_dir)
-
     tok.fit(map(lambda x: x["text"], tfds.as_numpy(train_data)))
+    return tok
 
-    train_text = tok.transform(
-        map(lambda x: x["text"], tfds.as_numpy(train_data)))
-    train_labels = map(lambda x: x["label"], tfds.as_numpy(train_data))
 
-    test_text = tok.transform(
-        map(lambda x: x["text"], tfds.as_numpy(test_data)))
-    test_labels = map(lambda x: x["label"], tfds.as_numpy(test_data))
+def train_input_fn(tok, batch_size):
+    train_data = tfds.load("imdb_reviews", split="train")
+    train_data_np = list(tfds.as_numpy(train_data))
+    train_text = tok.transform(map(lambda x: x["text"], train_data_np))
+    train_labels = map(lambda x: np.eye(2)[x["label"]], train_data_np)
+    train_labels = np.stack(list(train_labels), axis=0)
+    dataset = tf.data.Dataset.from_tensor_slices((list(train_text),
+                                                  train_labels))
+    dataset = dataset.batch(batch_size).repeat()
+    return dataset
 
-    print("done creating generators")
 
-    # Do not use Dataset.from_generator if you intend to serialize the graph and
-    # restore it in a different environment
-    # https://www.tensorflow.org/api_docs/python/tf/data/Dataset#from_generator
-    return tf.data.Dataset.from_tensor_slices(
-        (list(train_text),
-         list(train_labels))), tf.data.Dataset.from_tensor_slices(
-             (list(test_text), list(test_labels)))
+def test_input_fn(tok, batch_size):
+    test_data = tfds.load("imdb_reviews", split="test")
+    test_data_np = list(tfds.as_numpy(test_data))
+    test_text = tok.transform(map(lambda x: x["text"], test_data_np))
+    test_labels = map(lambda x: np.eye(2)[x["label"]], test_data_np)
+    test_labels = np.stack(list(test_labels), axis=0)
+    dataset = tf.data.Dataset.from_tensor_slices((list(test_text),
+                                                  test_labels))
+    dataset = dataset.batch(batch_size)
+    return dataset
