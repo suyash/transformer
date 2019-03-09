@@ -2,6 +2,8 @@
 imdb movie review sentiment prediction using the encoder
 """
 
+import functools
+
 from absl import app, flags
 import numpy as np
 import tensorflow as tf
@@ -73,18 +75,10 @@ def run(
                          dropout)
     model.summary()
 
-    tok = tokenizer(vocab_size, seq_len, model_dir)
+    tok = tokenizer(vocab_size, seq_len, data_dir=model_dir)
 
-    train_data = train_input_fn(tok, batch_size)
-    test_data = test_input_fn(tok, batch_size)
-
-    def train_input_fn():
-        train_data = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-        return train_data.batch(batch_size).repeat()
-
-    def eval_input_fn():
-        return tf.data.Dataset.from_tensor_slices((x_eval,
-                                                   y_eval)).batch(batch_size)
+    train_input_fn_ = functools.partial(train_input_fn, tok, batch_size)
+    test_input_fn_ = functools.partial(test_input_fn, tok, batch_size)
 
     config = tf.estimator.RunConfig(model_dir=model_dir)
     estimator = tf.keras.estimator.model_to_estimator(model, config=config)
@@ -107,17 +101,12 @@ def run(
         {"input_text": model.input})
 
     eval_spec = tf.estimator.EvalSpec(
-        eval_input_fn,
+        test_input_fn_,
         exporters=[
             tf.estimator.LatestExporter("model", serving_input_receiver_fn)
         ])
 
     tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
-
-    def test_input_fn():
-        return tf.data.Dataset.from_tensor_slices((x_test, y_test)).batch(1)
-
-    print(estimator.evaluate(test_input_fn))
 
 
 def main(_):
