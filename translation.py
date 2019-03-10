@@ -41,6 +41,8 @@
 - Now just doing Single Node Training on 4 K80 GPUs on Azure.
 
 - Also, on the `non-subclassing` branch, after removing subclassing, created an estimator and did distributed training on horovod.
+
+  Trained for 1_000 steps for 6.5 hours, didn't get anywhere. Need to be able to train for 100_000 to 300_000 steps, not doing it right now.
 """
 from absl import app, flags
 import numpy as np
