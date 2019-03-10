@@ -49,7 +49,7 @@ from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.layers import Input, Dense, Softmax
 from tensorflow.keras.models import Model
 
-from data.translation import datasets, load_vocab, PAD_ID
+from data.translation import train_input_fn, test_input_fn, load_vocab, PAD_ID
 from transformer import Transformer, label_smoothing
 
 app.flags.DEFINE_string("model_dir", "models/translation",
@@ -131,27 +131,6 @@ def run(
     source_vocab_size, target_vocab_size = len(source_id2word), len(
         target_id2word)
 
-    train_data, test_data = datasets(
-        dataset,
-        data_dir,
-        source_word2id,
-        target_word2id,
-        seq_len,
-        test_files=["newstest2013"])
-
-    train_data = train_data.map(
-        lambda s, t: ((s[1:], t[:-1]),
-                      label_smoothing(
-                          tf.one_hot(t[1:], depth=target_vocab_size),
-                          label_smoothing_epsilon, target_vocab_size)))
-    test_data = test_data.map(
-        lambda s, t: ((s[1:], t[:-1]),
-                      label_smoothing(
-                          tf.one_hot(t[1:], depth=target_vocab_size),
-                          label_smoothing_epsilon, target_vocab_size)))
-
-    train_data = train_data.shuffle(100).batch(batch_size).repeat()
-
     model = create_model(
         source_vocab_size,
         target_vocab_size,
@@ -164,6 +143,17 @@ def run(
     )
 
     model.summary()
+
+    train_data = train_input_fn(
+        dataset,
+        data_dir,
+        source_word2id,
+        target_word2id,
+        seq_len,
+        target_vocab_size,
+        label_smoothing_epsilon,
+        batch_size,
+    )
 
     model.fit(
         train_data,
