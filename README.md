@@ -21,7 +21,7 @@ model.load_weights(weights_dir)
 
 still works.
 
-The [__non-subclassing__](/tree/non-subclassing) branch removes subclassing to build a regular model, without any abstractions. This allows creating an estimator for training. The imdb demo notebook uses a model trained on that branch.
+The [__non-subclassing__](https://github.com/suyash/transformer/tree/non-subclassing) branch removes subclassing to build a regular model, without any abstractions. This allows creating an estimator for training. The imdb demo notebook uses a model [trained on that branch](https://github.com/suyash/transformer/blob/non-subclassing/imdb_sentiment.py#L84).
 
 The [`imdb_sentiment_demo`](https://colab.research.google.com/github/suyash/blob/master/imdb_sentiment_demo.ipynb) notebook also contains heatmaps for different attention heads for different layers. Couldn't get a visualization similar to [Tensor2Tensor](https://colab.research.google.com/github/tensorflow/tensor2tensor/blob/master/tensor2tensor/notebooks/hello_t2t.ipynb) to work.
 
