@@ -42,6 +42,8 @@
 
 - Also, on the `non-subclassing` branch, after removing subclassing, created an estimator and did distributed training on horovod.
 """
+import functools
+
 from absl import app, flags
 import numpy as np
 import tensorflow as tf
