@@ -9,6 +9,8 @@ from urllib.request import urlretrieve
 import numpy as np
 import tensorflow as tf
 
+from transformer import label_smoothing
+
 PAD_ID = 0
 UNKNOWN_ID = 1
 START_ID = 2
@@ -166,20 +168,47 @@ def _dataset(basefilepath, source_lang, target_lang, source_word2id,
     dataset = tf.data.Dataset.zip((source_dataset, target_dataset))
     dataset = dataset.filter(lambda s, l: tf.logical_and(
         tf.equal(tf.size(s), seq_len), tf.equal(tf.size(l), seq_len)))
+
+    dataset = dataset.map(lambda s, l: (fix_shape(s, [
+        seq_len,
+    ]), fix_shape(l, [
+        seq_len,
+    ])))
+
     return dataset
 
 
-def datasets(dataset,
-             data_dir,
-             source_word2id,
-             target_word2id,
-             seq_len,
-             test_files=None):
+def fix_shape(t, shape):
+    t.set_shape(shape)
+    return t
+
+
+def train_input_fn(dataset, data_dir, source_word2id, target_word2id, seq_len,
+                   target_vocab_size, label_smoothing_epsilon, batch_size):
     train_data = _dataset("%s/%s" % (data_dir, config[dataset]["train"]),
                           config[dataset]["source_lang"],
                           config[dataset]["target_lang"], source_word2id,
                           target_word2id, seq_len)
 
+    train_data = train_data.map(
+        lambda s, t: ((s[1:], t[:-1]),
+                      label_smoothing(
+                          tf.one_hot(t[1:], depth=target_vocab_size),
+                          label_smoothing_epsilon, target_vocab_size)))
+
+    train_data = train_data.shuffle(100).batch(batch_size).repeat()
+    return train_data
+
+
+def test_input_fn(dataset,
+                  data_dir,
+                  source_word2id,
+                  target_word2id,
+                  seq_len,
+                  target_vocab_size,
+                  label_smoothing_epsilon,
+                  batch_size,
+                  test_files=None):
     if test_files == None:
         test_files = config[dataset]["test"]
 
@@ -193,4 +222,11 @@ def datasets(dataset,
     for i in range(1, len(test_datasets)):
         test_data = test_data.concatenate(test_datasets[i])
 
-    return train_data, test_data
+    test_data = test_data.map(
+        lambda s, t: ((s[1:], t[:-1]),
+                      label_smoothing(
+                          tf.one_hot(t[1:], depth=target_vocab_size),
+                          label_smoothing_epsilon, target_vocab_size)))
+
+    test_data = test_data.batch(batch_size)
+    return test_data
