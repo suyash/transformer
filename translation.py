@@ -1,46 +1,5 @@
 """
-- the usual way to do distributed keras is to convert it to an estimator using `model_to_estimator`
-  but that does not work for subclassed models because of the same reasons model saving is not working
-
-- keras has a [multi_gpu_model](https://keras.io/utils/#multi_gpu_model) wrapper for model, but that works
-  for training when you have multiple GPUs on the same machine.
-
-- Another approach offered is `DistributionStrategy` (https://www.tensorflow.org/guide/distribute_strategy),
-  but that approach is also currently broken for subclassed models
-  (https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/distribute/python/keras_utils_test.py#L362-L391)
-
-- There were 3 options,
-  - Use Horovod from Uber, they provide some wrappers for keras' model.fit.
-    Horovod is available on Azure (https://docs.microsoft.com/en-us/azure/machine-learning/service/how-to-train-tensorflow#horovod).
-
-    This did not work out, first the implementation was broken for `tensorflow.keras` and required using the keras pip package.
-    (https://github.com/Azure/MachineLearningNotebooks/issues/226).
-    Did that in the `keras-team/keras` branch, but then the keras pip package's custom subclassed model had an issue
-    with variable number of inner layers (https://github.com/keras-team/keras/issues/12334). So any kind of attention demo
-    was impossible. Also, it looked like the weights were not being properly saved.
-
-  - break out of keras and run a training loop (https://www.tensorflow.org/tutorials/eager/custom_training_walkthrough)
-
-    - Nice introduction to the concepts: https://youtu.be/la_M6bCV91M?t=239
-    - DistributionStrategy: https://youtu.be/-h0cWBiQ8s8?t=56
-    - This is written for Azure and based on https://github.com/Azure/MachineLearningNotebooks/blob/master/how-to-use-azureml/training-with-deep-learning/distributed-tensorflow-with-parameter-server/tf_mnist_replica.py
-
-    Tried this, there are a number of examples using tf.train.Supervisor, however that is deprecated. Tried to implement one using tf.train.MonitoredSession
-    and was able to run a train loop, but the chief worker wouldn't exit. Seemed similar to https://github.com/tensorflow/tensorflow/issues/21745.
-
-    Ran on TensorFlow 1.10, couldn't override that with 1.12 on azure (later figured out how to, but didn't try again).
-
-  - break out of keras and run a training loop on Horovod TensorFlow
-
-    Tried this also. Custom training samples use `tf.GradientTape`, which does not support recording operations for calculating gradients
-    if it involves conditional operations (`tf.cond`, `tf.while`).
-
-    Tried the normal way with using `model.input` as a placeholder for input, does train, but then cannot save model weights.
-    The MonitoredSession errors out saying that the graph is finalized and the variables cannot be reinitialized.
-
-- Now just doing Single Node Training on 4 K80 GPUs on Azure.
-
-- Also, on the `non-subclassing` branch, after removing subclassing, created an estimator and did distributed training on horovod.
+Trained this on a distributed cluster of 4 K80 GPUs on horovod, for 1_000 steps.
 """
 import functools
 
