@@ -90,20 +90,32 @@ dependencies:
   - pip:
     - absl-py==0.7.1
     - astor==0.8.0
+    - chardet==3.0.4
+    - dill==0.3.0
+    - future==0.17.1
     - gast==0.2.2
     - google-pasta==0.1.7
+    - googleapis-common-protos==1.6.0
     - grpcio==1.22.0
     - h5py==2.9.0
+    - idna==2.8
     - keras-applications==1.0.8
     - keras-preprocessing==1.1.0
     - markdown==3.1.1
     - numpy==1.17.0
+    - promise==2.2.1
     - protobuf==3.9.0
+    - psutil==5.6.3
+    - requests==2.22.0
     - six==1.12.0
     - tb-nightly==1.14.0a20190603
     - tensorflow==2.0.0b1
+    - tensorflow-datasets==1.1.0
+    - tensorflow-metadata==0.14.0
     - termcolor==1.1.0
     - tf-estimator-nightly==1.14.0.dev2019060501
+    - tqdm==4.32.2
+    - urllib3==1.25.3
     - werkzeug==0.15.5
 prefix: /usr/local/miniconda3/envs/transformer
 
