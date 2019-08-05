@@ -3,7 +3,7 @@ import os
 from absl import app, flags, logging
 import tensorflow as tf
 from tensorflow.keras import Model  # pylint: disable=import-error
-from tensorflow.keras.callbacks import ReduceLROnPlateau, TensorBoard  # pylint: disable=import-error
+from tensorflow.keras.callbacks import TensorBoard  # pylint: disable=import-error
 from tensorflow.keras.layers import Dense, GlobalAveragePooling1D, Input  # pylint: disable=import-error
 import tensorflow_datasets as tfds
 
@@ -44,8 +44,8 @@ def main(_):
     net = GlobalAveragePooling1D()(net)
     net = Dense(1, activation="sigmoid")(net)
 
-    optimizer = tf.keras.optimizers.Adam(
-        learning_rate=flags.FLAGS.learning_rate)
+    learning_rate = CustomSchedule(flags.FLAGS.d_model)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
     loss_object = tf.keras.losses.BinaryCrossentropy()
 
     if flags.FLAGS.use_custom_training_loop:
@@ -75,16 +75,30 @@ def main(_):
                   validation_data=test_data,
                   validation_steps=flags.FLAGS.validation_steps,
                   callbacks=[
-                      ReduceLROnPlateau(monitor='val_loss',
-                                        factor=0.2,
-                                        patience=5,
-                                        min_lr=1e-6,
-                                        verbose=1,
-                                        cooldown=2),
                       TensorBoard(log_dir=flags.FLAGS["job-dir"].value),
                   ])
 
     model.save(os.path.join(flags.FLAGS["job-dir"].value, "model"))
+
+
+class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
+    def __init__(self, d_model, warmup_steps=4000):
+        super(CustomSchedule, self).__init__()
+
+        self.d_model = d_model
+        self.d_model = tf.cast(self.d_model, tf.float32)
+
+        self.warmup_steps = warmup_steps
+
+    def __call__(self, step):
+        arg1 = tf.math.rsqrt(step)
+        arg2 = step * (self.warmup_steps**-1.5)
+
+        return tf.math.rsqrt(self.d_model) * tf.math.minimum(arg1, arg2)
+
+    def get_config(self):
+        return dict([("d_model", self.d_model.numpy()),
+                     ("warmup_steps", self.warmup_steps)])
 
 
 @tf.function
@@ -158,11 +172,10 @@ if __name__ == "__main__":
     app.flags.DEFINE_integer("num_layers", 2, "num_layers")
     app.flags.DEFINE_integer("num_heads", 8, "num_heads")
     app.flags.DEFINE_float("dropout_rate", 0.1, "dropout_rate")
-    app.flags.DEFINE_float("learning_rate", 1e-4, "learning_rate")
     app.flags.DEFINE_integer("epochs", 50, "epochs")
     app.flags.DEFINE_integer("steps_per_epoch", 250, "steps_per_epoch")
     app.flags.DEFINE_integer("max_len", 500, "max_len")
-    app.flags.DEFINE_integer("batch_size", 4, "batch_size")
+    app.flags.DEFINE_integer("batch_size", 64, "batch_size")
     app.flags.DEFINE_integer("shuffle_buffer_size", 500, "shuffle_buffer_size")
     app.flags.DEFINE_integer("validation_steps", 50, "validation_steps")
     app.flags.DEFINE_boolean("use_custom_training_loop", False,
