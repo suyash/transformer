@@ -6,7 +6,7 @@ from tensorflow.keras import Model  # pylint: disable=import-error
 from tensorflow.keras.layers import Input  # pylint: disable=import-error
 import tensorflow_datasets as tfds
 
-from .transformer import Transformer
+from .transformer import Transformer, gelu
 
 
 class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
@@ -83,7 +83,9 @@ def main(_):
         d_ff=flags.FLAGS.d_ff,
         input_vocab_size=tokenizer_pt.vocab_size + 2,
         target_vocab_size=tokenizer_en.vocab_size + 2,
-        dropout_rate=flags.FLAGS.dropout_rate)(src, tar)
+        dropout_rate=flags.FLAGS.dropout_rate,
+        ffn_activation=gelu
+        if flags.FLAGS.use_gelu else tf.keras.activations.relu)(src, tar)
 
     learning_rate = CustomSchedule(flags.FLAGS.d_model)
     optimizer = tf.keras.optimizers.Adam(learning_rate,
@@ -212,6 +214,7 @@ if __name__ == "__main__":
     app.flags.DEFINE_integer("batch_size", 64, "batch_size")
     app.flags.DEFINE_integer("shuffle_buffer_size", 20000,
                              "shuffle_buffer_size")
+    app.flags.DEFINE_boolean("use_gelu", False, "use_gelu")
     app.flags.DEFINE_boolean("use_custom_training_loop", False,
                              "use_custom_training_loop")
     app.flags.DEFINE_string("tfds_data_dir", "~/tensorflow_datasets",

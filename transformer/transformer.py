@@ -1,5 +1,23 @@
+import math
+
 import tensorflow as tf
 from tensorflow.keras.layers import Add, Dense, Dropout, Embedding, Layer, LayerNormalization, Multiply, Permute, Reshape  # pylint: disable=import-error
+
+
+def gelu(x, faster_approx=False):
+    """
+    - https://arxiv.org/abs/1606.08415
+    - https://github.com/google-research/bert/blob/master/modeling.py#L264-L277
+    - https://github.com/hendrycks/GELUs
+    """
+
+    if faster_approx:
+        cdf = tf.sigmoid(1.072 * x)
+    else:
+        cdf = 0.5 * (1.0 + tf.tanh(
+            (tf.math.sqrt(2 / math.pi) * (x + 0.044715 * tf.pow(x, 3)))))
+
+    return x * cdf
 
 
 class Transformer:
@@ -11,6 +29,7 @@ class Transformer:
                  input_vocab_size,
                  target_vocab_size,
                  dropout_rate,
+                 ffn_activation=tf.keras.activations.relu,
                  scope="transformer"):
         self.encoder = Encoder(num_layers=num_layers,
                                d_model=d_model,
@@ -18,6 +37,7 @@ class Transformer:
                                d_ff=d_ff,
                                vocab_size=input_vocab_size,
                                dropout_rate=dropout_rate,
+                               ffn_activation=ffn_activation,
                                scope="%s/encoder" % scope)
 
         self.decoder = Decoder(num_layers=num_layers,
@@ -26,6 +46,7 @@ class Transformer:
                                d_ff=d_ff,
                                vocab_size=target_vocab_size,
                                dropout_rate=dropout_rate,
+                               ffn_activation=ffn_activation,
                                scope="%s/decoder" % scope)
 
         self.final_layer = Dense(target_vocab_size,
@@ -58,6 +79,7 @@ class Decoder:
                  d_ff,
                  vocab_size,
                  dropout_rate,
+                 ffn_activation=tf.keras.activations.relu,
                  scope="decoder"):
         self.d_model = d_model
         self.num_layers = num_layers
@@ -75,6 +97,7 @@ class Decoder:
                          num_heads=num_heads,
                          d_ff=d_ff,
                          dropout_rate=dropout_rate,
+                         ffn_activation=ffn_activation,
                          scope="%s/decoder_layer_%d" % (scope, i))
             for i in range(num_layers)
         ]
@@ -107,6 +130,7 @@ class Encoder:
                  d_ff,
                  vocab_size,
                  dropout_rate,
+                 ffn_activation=tf.keras.activations.relu,
                  scope="encoder"):
         self.d_model = d_model
         self.num_layers = num_layers
@@ -124,6 +148,7 @@ class Encoder:
                          num_heads=num_heads,
                          d_ff=d_ff,
                          dropout_rate=dropout_rate,
+                         ffn_activation=ffn_activation,
                          scope="%s/encoder_layer_%d" % (scope, i))
             for i in range(num_layers)
         ]
@@ -150,6 +175,7 @@ class DecoderLayer:
                  num_heads,
                  d_ff,
                  dropout_rate,
+                 ffn_activation=tf.keras.activations.relu,
                  scope="decoder_layer"):
         self.scope = scope
 
@@ -162,7 +188,10 @@ class DecoderLayer:
                                        scope="%s/multi_head_attention_2" %
                                        scope)
         self.ffn = PointwiseFeedForwardNetwork(
-            d_model, d_ff, scope="%s/pointwise_feed_forward_network" % scope)
+            d_model,
+            d_ff,
+            activation=ffn_activation,
+            scope="%s/pointwise_feed_forward_network" % scope)
 
         self.layernorm1 = LayerNormalization(epsilon=1e-6,
                                              name="%s/layer_norm_1" % scope)
@@ -201,6 +230,7 @@ class EncoderLayer:
                  num_heads,
                  d_ff,
                  dropout_rate,
+                 ffn_activation=tf.keras.activations.relu,
                  scope="encoder_layer"):
         self.scope = scope
 
@@ -209,7 +239,10 @@ class EncoderLayer:
                                        scope="%s/multi_head_attention_1" %
                                        scope)
         self.ffn = PointwiseFeedForwardNetwork(
-            d_model, d_ff, scope="%s/pointwise_feed_forward_network" % scope)
+            d_model,
+            d_ff,
+            activation=ffn_activation,
+            scope="%s/pointwise_feed_forward_network" % scope)
 
         self.layernorm1 = LayerNormalization(epsilon=1e-6,
                                              name="%s/layer_norm_1" % scope)
@@ -234,9 +267,13 @@ class EncoderLayer:
 
 
 class PointwiseFeedForwardNetwork:
-    def __init__(self, d_model, d_ff, scope="pointwise_feed_forward_network"):
+    def __init__(self,
+                 d_model,
+                 d_ff,
+                 activation=tf.keras.activations.relu,
+                 scope="pointwise_feed_forward_network"):
         self.dense_1 = Dense(d_ff,
-                             activation="relu",
+                             activation=activation,
                              name="%s/dense_1" % scope)
         self.dense_2 = Dense(d_model,
                              activation=None,
