@@ -21,14 +21,14 @@ def main(_):
     train_data = train_data.filter(
         lambda x, y: tf.shape(x)[0] < flags.FLAGS.max_len)
     train_data = train_data \
-        .padded_batch(flags.FLAGS.batch_size, train_data.output_shapes) \
+        .padded_batch(flags.FLAGS.batch_size) \
         .shuffle(flags.FLAGS.shuffle_buffer_size) \
         .repeat()
 
     test_data = test_data.filter(
         lambda x, y: tf.shape(x)[0] < flags.FLAGS.max_len)
     test_data = test_data \
-        .padded_batch(flags.FLAGS.batch_size, test_data.output_shapes)
+        .padded_batch(flags.FLAGS.batch_size)
 
     vocab_size = info.features["text"].encoder.vocab_size
 
