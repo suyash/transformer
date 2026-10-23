@@ -47,10 +47,10 @@ class CustomLoss(tf.keras.losses.Loss):
 
 
 def main(_):
-    tokenizer_en = tfds.features.text.SubwordTextEncoder.load_from_file(
+    tokenizer_en = tfds.deprecated.text.SubwordTextEncoder.load_from_file(
         flags.FLAGS.subwords_en_file)
 
-    tokenizer_pt = tfds.features.text.SubwordTextEncoder.load_from_file(
+    tokenizer_pt = tfds.deprecated.text.SubwordTextEncoder.load_from_file(
         flags.FLAGS.subwords_pt_file)
 
     data = tfds.load('ted_hrlr_translate/pt_to_en',
